@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Radelt
+Icon=/usr/share/icons/hicolor/80x80/apps/harbour-radelt.png
+Exec=/usr/bin/invoker --type=d -s /opt/harbour-radelt/bin/harbour-radelt
+X-Window-Icon=harbour-radelt
+X-HildonDesk-ShowInToolbar=true
+X-Osso-Type=application/x-executable;

@@ -1,0 +1,11 @@
+<aegis>
+    <request policy="add">
+        <!-- The session bus refuses com.nokia.positioningd.client to
+             everything but a process holding Location; without this line
+             the recording page never gets a fix, indoors or out.
+             Belegt: modRana 0.43.4 (fremdes, selbst verteiltes Paket)
+             fuehrt dieselbe Zeile und bekam am N9/N950 die Position. -->
+        <credential name="Location" />
+        <for path="/opt/harbour-radelt/bin/harbour-radelt" />
+    </request>
+</aegis>

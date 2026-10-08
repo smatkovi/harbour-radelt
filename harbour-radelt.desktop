@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-radelt
+Exec=harbour-radelt
+Name=Radelt
+Name[de]=Radelt
+
+[X-Sailjail]
+OrganizationName=harbour-radelt
+ApplicationName=harbour-radelt
+Permissions=Internet;Location

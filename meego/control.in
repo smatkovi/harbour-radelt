@@ -1,0 +1,18 @@
+Package: harbour-radelt
+Version: @VERSION@
+Architecture: armel
+Maintainer: Sebastian Matkovich <sebastian.matkovich@gmail.com>
+Depends: libqtcore4, libqtgui4, libqt4-network, libqt4-dbus, libqt4-declarative, libqtm-location, libmeegotouchcore0, qt-components
+Section: user/other
+Priority: optional
+Aegis-Manifest: included
+Description: Kilometres for Österreich radelt
+ Records bicycle rides with the satellite receiver, keeps them on the phone
+ as GPX, and sends the kilometres to the Österreich radelt platform. Rides
+ can also be typed in by hand.
+ .
+ The MeeGo Harmattan edition: Qt 4.7 with com.nokia.meego instead of Silica,
+ the same recording and upload core as the Sailfish edition.
+Maemo-Display-Name: Radelt
+XB-Maemo-Icon-26:
+@ICON@
