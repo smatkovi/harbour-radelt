@@ -61,6 +61,8 @@ arm)
     QTINC=$SYSROOT/usr/include/qt4
     CXXFLAGS="--sysroot=$SYSROOT $COMMON_FLAGS $CXX_ONLY -I$QTINC"
     for m in $QT4_MODULES; do CXXFLAGS="$CXXFLAGS -I$QTINC/$m"; done
+    # QtLocation-Header ziehen qmobilityglobal.h aus dem QtMobility-Modul.
+    CXXFLAGS="$CXXFLAGS -I$QTINC/QtMobility"
     # Harmattan is hard-float but kept the old loader name; the static
     # libstdc++ of the newer GCC stays private to the binary.
     LDFLAGS="--sysroot=$SYSROOT -static-libstdc++ -static-libgcc -Wl,-O1 -Wl,--as-needed \
