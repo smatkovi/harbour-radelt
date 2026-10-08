@@ -336,11 +336,12 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (list.isEmpty())
             list = map.value("bikes").toList();
         for (int i = 0; i < list.size(); ++i) {
+            // Measured against the real answer (doc/api-echte-antworten.md):
+            // a bike is { id, name, entryType, isEbike, isMain, ... }.
             const QVariantMap bike = list.at(i).toMap();
-            const QString name = (bike.value("brand").toString() + " "
-                                  + bike.value("model").toString()).trimmed();
+            const QString name = bike.value("name").toString();
             m_bikeNames << (name.isEmpty() ? tr("Bike %1").arg(i + 1) : name);
-            m_bikeIds << bike.value("bikeId").toLongLong();
+            m_bikeIds << bike.value("id").toLongLong();
         }
         emit bikesChanged();
         break;
