@@ -34,6 +34,8 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
 {
     connect(m_http, SIGNAL(finished(int,int,QByteArray,QString)),
             this, SLOT(replyFinished(int,int,QByteArray,QString)));
+    connect(m_http, SIGNAL(cookie(QString,QString)),
+            this, SLOT(cookieReceived(QString,QString)));
 }
 
 QString Api::displayName() const
@@ -69,8 +71,12 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
               const QVariantMap &body, const QString &rideId)
 {
     QStringList headers;
-    if (!m_token.isEmpty())
-        headers << "Authorization" << ("Bearer " + m_token);
+    if (!m_token.isEmpty()) {
+        // Nachgemessen am Original (doc/api-echte-antworten.md): die
+        // Plattform weist ueber den Keks fw_login aus. Derselbe Wert als
+        // "Authorization: Bearer" gibt 401 -- der Token ist ein Keks.
+        headers << "Cookie" << ("fw_login=" + m_token);
+    }
 
     Pending pending;
     pending.kind = kind;
@@ -217,6 +223,14 @@ void Api::sendTrack(const QString &rideId, qlonglong remoteId)
     send(TrackSaveRequest, "PUT", "/ride/track/save", body, rideId);
 }
 
+void Api::cookieReceived(const QString &name, const QString &value)
+{
+    // fw_login is the platform's token: a year's worth of login, handed
+    // out by /login and expected back on every call.
+    if (name == QLatin1String("fw_login") && !value.isEmpty())
+        setToken(value);
+}
+
 void Api::replyFinished(int tag, int status, const QByteArray &body, const QString &error)
 {
     const Pending pending = m_pending.take(tag);
@@ -288,17 +302,21 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
 
     switch (pending.kind) {
     case LoginRequest: {
+        // The token usually arrives as the fw_login cookie, which
+        // cookieReceived() has already stored by now; the body is only
+        // consulted when it did not.
         QString token = map.value("api_token").toString();
         if (token.isEmpty())
             token = map.value("token").toString();
         if (token.isEmpty())
             token = Json::value(data, "user/api_token").toString();
-        if (token.isEmpty()) {
+        if (!token.isEmpty())
+            setToken(token);
+        if (!loggedIn()) {
             setError(tr("The server sent no token"));
             qWarning() << "radelt: login answer without a token" << map.keys();
             return;
         }
-        setToken(token);
         if (map.contains("person"))
             m_person = map.value("person").toMap();
         else

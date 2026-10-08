@@ -65,6 +65,7 @@ signals:
 
 private slots:
     void replyFinished(int tag, int status, const QByteArray &body, const QString &error);
+    void cookieReceived(const QString &name, const QString &value);
 
 private:
     enum Kind { LoginRequest, PersonRequest, BikesRequest, DashboardRequest,

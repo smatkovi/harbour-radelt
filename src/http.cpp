@@ -57,6 +57,20 @@ void NetworkHttp::replyFinished()
     const int tag = m_tags.take(reply);
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QByteArray body = reply->readAll();
+
+    // The platform hands out its token as a cookie, so every answer is
+    // searched for one. QNetworkAccessManager keeps its own jar for the
+    // running session; this is what survives a restart.
+    const QList<QNetworkReply::RawHeaderPair> pairs = reply->rawHeaderPairs();
+    for (int i = 0; i < pairs.size(); ++i) {
+        if (pairs.at(i).first.toLower() != "set-cookie")
+            continue;
+        const QByteArray first = pairs.at(i).second.split(';').value(0).trimmed();
+        const int equals = first.indexOf('=');
+        if (equals > 0)
+            emit cookie(QString::fromUtf8(first.left(equals)),
+                        QString::fromUtf8(first.mid(equals + 1)));
+    }
     // A server answer with success:false still arrives as HTTP 200; only a
     // transport failure counts as an error here, so the API client can tell
     // "no network" from "wrong password".
@@ -122,8 +136,17 @@ void ProcessHttp::processFinished(int code, QProcess::ExitStatus status)
     const QList<QByteArray> lines = diagnostics.split('\n');
     for (int i = 0; i < lines.size(); ++i) {
         const QByteArray line = lines.at(i).trimmed();
-        if (line.startsWith("status:"))
+        if (line.startsWith("status:")) {
             httpStatus = line.mid(7).trimmed().toInt();
+        } else if (line.startsWith("cookie:")) {
+            // radelt-fetch reports every Set-Cookie this way; the token
+            // of the platform arrives as one.
+            const QByteArray keks = line.mid(7).trimmed();
+            const int equals = keks.indexOf('=');
+            if (equals > 0)
+                emit cookie(QString::fromUtf8(keks.left(equals)),
+                            QString::fromUtf8(keks.mid(equals + 1)));
+        }
     }
 
     QString error;

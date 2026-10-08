@@ -365,7 +365,47 @@ Webformular antworten `/dashboard`, `/person` und `/bikes` weiter mit
 Es gibt **keine zweite Anmelderoute**: `/oauth/token`, `/api/v1/*`, `/api/v3/*`,
 `/sanctum/csrf-cookie` sind alle 404.
 
-### 10.5 Der verbleibende Verdacht
+### 10.5 Aufgeloest: der Token ist ein Keks, kein Bearer
+
+Die Original-APK wurde unter Androidsupport auf dem jp2 installiert und dort mit
+demselben Konto angemeldet -- **das ging**. Ihre abgelegten Dateien
+(`/home/.appsupport/instance/<nutzer>/data/data/com.jonasit.fahrradwettbewerb.oer`)
+beantworten den Rest; `tools/read-android-app.sh` liest sie aus:
+
+* `shared_prefs/FlutterSharedPreferences.xml` enthaelt **im Klartext**
+  `flutter.API_TOKEN` (60 Zeichen) und `flutter.DASHBOARD_DATA` (die zwischen-
+  gespeicherte Dashboard-Antwort). Der verschluesselte Speicher
+  (`FlutterSecureStorage.xml`) wird fuer anderes benutzt.
+* `app_flutter/.cookies/ie0_ps1/.index` nennt den Server: **`dashboard.radelt.at`** --
+  die App spricht *nicht* mit der Bundesland-Instanz, die ist nur fuer das Web.
+* `.domains` enthaelt zwei Kekse: **`fw_login`** (Max-Age 31535998, also ein Jahr,
+  Secure, HttpOnly) und `osterreich_radelt_session` (2 Stunden).
+* **`flutter.API_TOKEN` ist Byte fuer Byte der Wert des Keks `fw_login`.**
+
+Gemessen mit diesem Wert gegen `https://dashboard.radelt.at/api/v2`:
+
+| Art, ihn zu schicken | Antwort |
+|---|---|
+| `Cookie: fw_login=<token>` | **200** mit Nutzlast |
+| `Authorization: Bearer <token>` | 401 |
+
+Damit ist §2 korrigiert: **die Plattform weist ueber den Keks `fw_login` aus.**
+Der `Bearer`-Faden im Binaer gehoert zur HTTP-Bibliothek, nicht zu dieser API.
+
+Die echten Antwortformate stehen jetzt gemessen in
+[`api-echte-antworten.md`](api-echte-antworten.md) -- die Felder heissen durchweg
+**camelCase** (`kmCount`, `savedCO2`, `savedMoney`, `daysTracked`, `elevation`),
+nicht snake_case wie in §5.7 vermutet.
+
+### 10.6 Warum die eigene Anmeldung trotzdem scheiterte -- der naechste Verdacht
+
+Im Konto steht die Mailadresse **mit grossem Anfangsbuchstaben**
+(`Sebastian.matkovich@…`), getippt und gesendet wurde sie durchweg klein. Wenn die
+Spalte binaer verglichen wird, findet der Anmelde-Code das Konto nicht -- was genau
+zu dem passt, was wir sehen: 200, Code laeuft, niemand gefunden. **Zu pruefen:**
+dieselbe Anmeldung mit der Mailadresse in der Schreibweise des Kontos.
+
+### 10.7 Der alte Verdacht (erledigt)
 
 Dasselbe Konto meldet sich am Webformular an (302 auf `/dashboard/home`), an der
 Schnittstelle nicht. Die App-Registrierung ist zweistufig (`registeruser` →

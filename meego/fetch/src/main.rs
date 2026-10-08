@@ -53,9 +53,15 @@ fn main() {
     let _ = std::io::stdin().read_to_end(&mut body);
 
     match send(&method, &url, &headers, body) {
-        Ok((status, answer)) => {
+        Ok((status, kekse, answer)) => {
             let _ = std::io::stdout().write_all(&answer);
             let _ = std::io::stdout().flush();
+            // Die Plattform weist ueber den Keks fw_login aus, nicht ueber
+            // einen Authorization-Kopf -- deshalb muss der Aufrufer jeden
+            // Set-Cookie sehen.
+            for keks in kekse {
+                eprintln!("cookie: {}", keks);
+            }
             eprintln!("status: {}", status);
         }
         Err(reason) => {
@@ -70,12 +76,13 @@ fn send(
     url: &str,
     headers: &[(String, String)],
     body: Vec<u8>,
-) -> Result<(u16, Vec<u8>), String> {
+) -> Result<(u16, Vec<String>, Vec<u8>), String> {
     let client = reqwest::blocking::Client::builder()
         // A phone on a bicycle loses the network often enough that a
         // request must give up by itself rather than hold the upload queue.
         .timeout(Duration::from_secs(45))
         .user_agent("harbour-radelt/0.1 (MeeGo Harmattan)")
+        .cookie_store(true)
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -91,6 +98,13 @@ fn send(
 
     let response = request.send().map_err(|e| e.to_string())?;
     let status = response.status().as_u16();
+    let kekse: Vec<String> = response
+        .headers()
+        .get_all(reqwest::header::SET_COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .map(|v| v.split(';').next().unwrap_or(v).trim().to_string())
+        .collect();
     let answer = response.bytes().map_err(|e| e.to_string())?.to_vec();
-    Ok((status, answer))
+    Ok((status, kekse, answer))
 }

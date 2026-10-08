@@ -29,6 +29,11 @@ signals:
     // (no network, TLS refused, helper missing). error carries the reason
     // in that case.
     void finished(int tag, int status, const QByteArray &body, const QString &error);
+
+    // Every Set-Cookie the answer carried. The platform authenticates by
+    // cookie (fw_login), so this is how the client learns its token --
+    // measured against the original app, see doc/api.md.
+    void cookie(const QString &name, const QString &value);
 };
 
 #if QT_VERSION >= 0x050000
