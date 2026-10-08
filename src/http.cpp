@@ -5,6 +5,7 @@
 
 #if QT_VERSION >= 0x050000
 
+#include <QBuffer>
 #include <QNetworkRequest>
 #include <QUrl>
 
@@ -23,14 +24,26 @@ void NetworkHttp::request(int tag, const QString &verb, const QString &url,
         request.setRawHeader(headers.at(i).toUtf8(), headers.at(i + 1).toUtf8());
 
     QNetworkReply *reply = 0;
-    if (verb == QLatin1String("GET"))
+    if (verb == QLatin1String("GET")) {
         reply = m_manager.get(request);
-    else if (verb == QLatin1String("POST"))
+    } else if (verb == QLatin1String("POST")) {
         reply = m_manager.post(request, body);
-    else if (verb == QLatin1String("PUT"))
+    } else if (verb == QLatin1String("PUT")) {
         reply = m_manager.put(request, body);
-    else
-        reply = m_manager.sendCustomRequest(request, verb.toLatin1(), body);
+    } else {
+        // DELETE with a body, which /ride/delete wants. Qt 5.6 takes the
+        // payload of a custom request only as a device, and the device has
+        // to outlive the request -- hence the buffer parented on the reply.
+        QBuffer *payload = 0;
+        if (!body.isEmpty()) {
+            payload = new QBuffer;
+            payload->setData(body);
+            payload->open(QIODevice::ReadOnly);
+        }
+        reply = m_manager.sendCustomRequest(request, verb.toLatin1(), payload);
+        if (payload)
+            payload->setParent(reply);
+    }
 
     m_tags.insert(reply, tag);
     connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
