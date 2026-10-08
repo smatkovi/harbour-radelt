@@ -79,6 +79,7 @@ private:
     int m_movingSeconds;
     double m_smoothedAltitude;  // the climb is counted on a smoothed line
     bool m_haveSmoothed;
+    TrackPoint m_anchor;        // the last point that counted for distance
 };
 
 #endif

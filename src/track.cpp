@@ -37,6 +37,7 @@ void Track::clear()
     m_movingSeconds = 0;
     m_smoothedAltitude = 0;
     m_haveSmoothed = false;
+    m_anchor = TrackPoint();
 }
 
 double Track::distanceBetween(const TrackPoint &from, const TrackPoint &to)
@@ -60,6 +61,7 @@ bool Track::append(const TrackPoint &point)
 
     if (m_points.isEmpty()) {
         m_points.append(point);
+        m_anchor = point;
         if (point.hasAltitude()) {
             m_smoothedAltitude = point.altitude;
             m_haveSmoothed = true;
@@ -72,31 +74,41 @@ bool Track::append(const TrackPoint &point)
         && point.time < last.time)
         return false;                   // out of order
 
-    const double step = distanceBetween(last, point);
-    int seconds = 0;
-    if (point.time.isValid() && last.time.isValid())
-        seconds = last.time.secsTo(point.time);
-
-    if (seconds > 0 && step / seconds > MaximumPlausibleSpeed)
-        return false;
-
-    // A fix that only jitters on the spot must not add distance: with a
-    // 10 m scatter and a fix a second, standing at a traffic light for two
-    // minutes would otherwise "ride" a kilometre. The threshold is tied to
-    // the reported accuracy, generously, and never below 3 m.
-    double jitter = 3.0;
-    if (point.hasAccuracy())
-        jitter = qMax(jitter, point.accuracy * 0.5);
-    if (step < jitter) {
-        // Still record the point -- the line should show the stop -- but
-        // neither distance nor moving time grows.
-        m_points.append(point);
-        return true;
+    {
+        const double leap = distanceBetween(last, point);
+        int gap = 0;
+        if (point.time.isValid() && last.time.isValid())
+            gap = last.time.secsTo(point.time);
+        if (gap > 0 && leap / gap > MaximumPlausibleSpeed)
+            return false;               // no bicycle does that
     }
 
-    m_distance += step;
+    // Distance is measured from the last point that counted, not from the
+    // last point that arrived. A standing receiver wanders by about its own
+    // accuracy from fix to fix; measured from its neighbour, every one of
+    // those steps looks like riding, and two minutes at a traffic light
+    // "ride" a few hundred metres. Measured from an anchor that only moves
+    // once the threshold is passed, standing still adds nothing at all,
+    // while riding still adds everything -- only in steps of a second or
+    // two rather than every single fix.
+    const double fromAnchor = distanceBetween(m_anchor, point);
+    double threshold = 3.0;
+    if (point.hasAccuracy())
+        threshold = qMax(threshold, point.accuracy);
+    if (m_anchor.hasAccuracy())
+        threshold = qMax(threshold, m_anchor.accuracy);
+
+    m_points.append(point);
+    if (fromAnchor <= threshold)
+        return true;                    // in the line, not in the numbers
+
+    int seconds = 0;
+    if (point.time.isValid() && m_anchor.time.isValid())
+        seconds = m_anchor.time.secsTo(point.time);
+
+    m_distance += fromAnchor;
     if (seconds > 0) {
-        const double speed = step / seconds;
+        const double speed = fromAnchor / seconds;
         if (speed > m_standstill)
             m_movingSeconds += seconds;
         if (speed > m_maximumSpeed && speed < MaximumPlausibleSpeed)
@@ -118,7 +130,7 @@ bool Track::append(const TrackPoint &point)
         }
     }
 
-    m_points.append(point);
+    m_anchor = point;
     return true;
 }
 
