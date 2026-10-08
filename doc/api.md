@@ -314,3 +314,64 @@ Nebenrouten: `GET /api/v2/forgotpassword?email=...` (Passwort-Reset),
 - Proberunde 2 (PUT/DELETE/PATCH für die 405/405-Fälle) nur als Statuszeilen gemessen; die
   Ergebnisse stehen in §3 (nicht als Dateien abgelegt).
 - `getters.txt`, `snake_keys.txt`, `camel_mixed.txt`, `tokens.tsv` — Feldnamen-Auszüge aus dem Binär.
+
+---
+
+## 10. Nachtrag 08.10.2026 — am lebenden Server gemessen
+
+Mit einem echten Konto (am selben Tag auf der Webseite angelegt, Mail bestätigt)
+nachgemessen. Vier Dinge sind damit belegt und korrigieren §1 und §2:
+
+### 10.1 Jedes Bundesland ist eine eigene Instanz
+
+Die Anmeldung über `https://www.radelt.at/dashboard/login` antwortet mit `302` auf
+**`https://wien.radelt.at/dashboard/login`** — das Konto liegt auf der Wiener Instanz.
+Gemessen: `wien.radelt.at` und `vorarlberg.radelt.at` führen beide eine vollständige
+`/dashboard/api/v2/`-Schnittstelle, `noe.radelt.at` leitet um (301).
+**Folge für den Port:** die Basis-Adresse darf nicht fest verdrahtet sein. Im Binär der
+Android-App stehen `dashboard` und `radelt.at` denn auch als getrennte Zeichenketten —
+sie wird zur Laufzeit zusammengesetzt.
+
+### 10.2 Zwei Pfade, ein Server
+
+`https://dashboard.radelt.at/api/v2/…` und `https://<land>.radelt.at/dashboard/api/v2/…`
+verhalten sich identisch (gemessen für login und statistics). `www.radelt.at/api/v2/…`
+gibt es **nicht** (404).
+
+### 10.3 Die Statuskennungen trennen Middleware und Anmelde-Code
+
+| Aufruf | Status | Körper |
+|---|---|---|
+| `POST /api/v2/login` mit `{}` | **200** | `authentication_failed` |
+| `POST /api/v2/login` mit richtiger Mail + Passwort | **200** | `authentication_failed` |
+| `GET /api/v2/statistics` ohne Token | **401** | derselbe Körper |
+| `GET /api/v2/statistics` mit Unsinns-Token | **401** | derselbe Körper |
+| `POST /api/v2/registeruser` mit `{}` | **400** | `{"error":{"password":[…],"email":[…]}}` |
+
+Daraus folgt: `/login` liegt **nicht** hinter der Auth-Middleware (die antwortet 401), der
+Anmelde-Code läuft also und scheitert an den Zugangsdaten. Und `registeruser` beweist die
+Feldnamen `email` und `password` für dieselbe Anwendung.
+
+### 10.4 Was die Anmeldung *nicht* ist
+
+Alles Folgende gemessen, alles abgelehnt mit demselben `authentication_failed`:
+Feldname `email`, `username`, `login`; Passwort als Klartext, sha256, sha1, md5;
+JSON und Formular; `Authorization: Basic`; mit und ohne `deviceId`/`appVersion`/`platform`;
+verschachtelt als `{"user":{…}}`; auf `dashboard.radelt.at` wie auf `wien.radelt.at`.
+**Auch eine gültige Web-Sitzung hilft nicht:** mit dem Keks aus dem erfolgreichen
+Webformular antworten `/dashboard`, `/person` und `/bikes` weiter mit
+`authentication_failed`. Die Schnittstelle nimmt ausschließlich ihren eigenen Token.
+
+Es gibt **keine zweite Anmelderoute**: `/oauth/token`, `/api/v1/*`, `/api/v3/*`,
+`/sanctum/csrf-cookie` sind alle 404.
+
+### 10.5 Der verbleibende Verdacht
+
+Dasselbe Konto meldet sich am Webformular an (302 auf `/dashboard/home`), an der
+Schnittstelle nicht. Die App-Registrierung ist zweistufig (`registeruser` →
+`registerpersonaldata`); ein auf der Webseite angelegtes Konto hat die zweite Stufe
+vielleicht nie durchlaufen und ist der Schnittstelle unbekannt.
+**Nächster Schritt:** die Original-APK unter Androidsupport laufen lassen und dort
+dasselbe Konto anmelden. Gelingt es ihr auch nicht, liegt es am Konto und nicht am
+Nachbau; gelingt es, verrät ihr Zwischenspeicher (`dio_cache_interceptor` auf Hive) die
+echten Formate — `tools/read-android-app.sh` liest ihn aus.
