@@ -32,8 +32,8 @@ also be typed in by hand.
 %setup -q -n %{name}-%{version}
 
 %build
-%qtc_qmake5
-%qtc_make %{?_smp_mflags}
+%qmake5 VERSION=%{version}
+%make_build
 
 %install
 rm -rf %{buildroot}
