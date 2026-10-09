@@ -397,13 +397,41 @@ Die echten Antwortformate stehen jetzt gemessen in
 **camelCase** (`kmCount`, `savedCO2`, `savedMoney`, `daysTracked`, `elevation`),
 nicht snake_case wie in §5.7 vermutet.
 
-### 10.6 Warum die eigene Anmeldung trotzdem scheiterte -- der naechste Verdacht
+### 10.6 Die Anmeldung mit Passwort: erschöpfend geprüft, nimmt der Server nicht
 
-Im Konto steht die Mailadresse **mit grossem Anfangsbuchstaben**
-(`Sebastian.matkovich@…`), getippt und gesendet wurde sie durchweg klein. Wenn die
-Spalte binaer verglichen wird, findet der Anmelde-Code das Konto nicht -- was genau
-zu dem passt, was wir sehen: 200, Code laeuft, niemand gefunden. **Zu pruefen:**
-dieselbe Anmeldung mit der Mailadresse in der Schreibweise des Kontos.
+Dasselbe Konto meldet sich am **Webformular** von `dashboard.radelt.at` an
+(302 auf `/dashboard/home`), an `/api/v2/login` nicht. Und: die **Original-APK**
+unter Androidsupport scheitert mit demselben Konto genauso — es liegt also
+nicht am Nachbau.
+
+Geprüft und alles mit `authentication_failed` abgelehnt:
+
+| Achse | probiert |
+|---|---|
+| Feldname der Kennung | `email`, `username`, `login`, `user`, `identity` |
+| Wert der Kennung | Mailadresse klein und in der Schreibweise des Kontos |
+| Passwortform | Klartext, sha256, sha1, md5 |
+| Kodierung | JSON, Formular, Abfrageparameter, verschachtelt `{"user":{…}}` |
+| Kopfzeilen | Basic-Auth, `User-Agent: Dart/…`, `Accept-Encoding: gzip`, Geräteangaben (`deviceId`, `appVersion`, `platform`) |
+| Sitzung | ohne Keks, mit Sitzungskeks der Schnittstelle (über `validatepostcode` geholt), mit Sitzung des Webformulars |
+| Server | `dashboard.radelt.at`, `wien.radelt.at/dashboard` |
+
+Dazu die Belege, dass es keine andere Tür gibt: `/oauth/token`, `/api/v1/*`,
+`/api/v3/*`, `/sanctum/csrf-cookie` sind 404; das Web-Dashboard ist
+serverseitig gerendert und ruft `/api/v2` nie auf; `/login` antwortet **200**
+(der Anmelde-Code läuft also und findet niemanden), geschützte Routen **401**,
+und `registeruser` belegt namentlich die Felder `email` und `password`.
+
+**Schluss:** der Server nimmt dieses Konto an der App-Schnittstelle nicht an.
+Ein über die Webseite angelegtes Konto hat die zweite Stufe der
+App-Registrierung (`registeruser` → `registerpersonaldata`) nie durchlaufen.
+Wer eine Anmeldung mit Passwort braucht, legt das Konto **in der App** an;
+bis dahin trägt der Keks `fw_login`, der ein Jahr gilt.
+
+**Ein Mitschnitt der Original-App ist nicht möglich:** Dart/Flutter vertraut
+nur seiner eingebauten Wurzelliste, nicht dem System- oder Apex-Speicher von
+Android — eine eigene CA dort wird ignoriert (am Gerät versucht, der
+Handschlag kam nie zustande).
 
 ### 10.7 Der alte Verdacht (erledigt)
 

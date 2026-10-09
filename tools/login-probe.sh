@@ -1,30 +1,28 @@
 #!/bin/sh
-# Sucht den Weg, auf dem die App an ihren Keks fw_login kommt.
+# Letzter offener Verdacht zur Anmeldung an der App-Schnittstelle.
 #
 #   sh tools/login-probe.sh
 #
-# Stand der Erkenntnis: die Schnittstelle weist ueber den Keks `fw_login`
-# aus (nachgemessen am Original, doc/api.md §10.5). Der Name sagt
-# "Fahrradwettbewerb-Login", und `POST https://dashboard.radelt.at/login`
-# antwortet mit 419 -- das ist Laravels CSRF-Schutz, also eine Webroute mit
-# Formular. Die Vermutung: die App meldet sich dort an, nicht ueber
-# /api/v2/login, und benutzt danach den Keks.
+# Was wir wissen (doc/api.md §10): die Schnittstelle weist über den Keks
+# `fw_login` aus, das Webformular auf dashboard.radelt.at nimmt dasselbe
+# Konto an (302), /api/v2/login lehnt es ab. Alle bisherigen Versuche gingen
+# **ohne jeden Keks** hinaus -- die Original-App dagegen führt ein Keksglas
+# (cookie_jar + dio_cookie_manager) und holt sich vor der Anmeldung eine
+# Sitzung. Genau das wird hier nachgestellt:
 #
-# Dieses Skript geht genau das durch:
-#   1. Anmeldeseite von dashboard.radelt.at holen (Sitzung + CSRF-Marke).
-#   2. Dort anmelden wie ein Browser.
-#   3. Nachsehen, welche Kekse zurueckkamen -- besonders fw_login.
-#   4. Mit dem Keks die Schnittstelle fragen. 200 heisst: Weg gefunden.
-#   5. Nur zur Vollstaendigkeit noch /api/v2/login mit denselben Daten.
+#   1. GET auf eine Schnittstellen-Route -> Sitzungskeks einsammeln.
+#   2. POST /api/v2/login **mit** diesem Keks.
+#   3. Dasselbe noch einmal mit den Kopfzeilen, die dio von sich aus
+#      schickt (Useragent Dart, gzip) -- auch das war nie geprüft.
+#   4. Und mit den Zugangsdaten als Abfrageparameter statt im Körper.
 #
 # Das Passwort wird verdeckt eingelesen, steht in keiner Befehlszeile und
-# wird nie ausgegeben. Von den Keksen werden nur Namen und Laengen gezeigt.
+# wird nie ausgegeben.
 set -e
 
-BASIS=${1:-https://dashboard.radelt.at}
-KEKSE=$(mktemp /tmp/radelt-kekse.XXXXXX)
-SEITE=$KEKSE.page
-trap 'rm -f "$SEITE"' EXIT          # das Keksglas bleibt absichtlich liegen
+API=${1:-https://dashboard.radelt.at/api/v2}
+GLAS=$(mktemp /tmp/radelt-glas.XXXXXX)
+trap 'rm -f "$GLAS"' EXIT
 
 printf 'E-Mail: '
 read -r KENNUNG
@@ -33,50 +31,52 @@ stty -echo 2>/dev/null || true
 read -r GEHEIM
 stty echo 2>/dev/null || true
 printf '\n\n'
+export KENNUNG GEHEIM
 
-echo "=== 1. Anmeldeseite $BASIS/login ==="
-curl -s -m 30 -c "$KEKSE" -o "$SEITE" "$BASIS/login"
-TOKEN=$(sed -n 's/.*name="_token"[^>]*value="\([^"]*\)".*/\1/p' "$SEITE" | head -1)
-[ -n "$TOKEN" ] || TOKEN=$(sed -n 's/.*<meta name="csrf-token" content="\([^"]*\)".*/\1/p' "$SEITE" | head -1)
-printf '   CSRF-Marke: %d Zeichen\n' "${#TOKEN}"
-printf '   Felder im Formular: '
-grep -oE '<input[^>]*name="[^"]+"' "$SEITE" | sed -E 's/.*name="([^"]+)"/\1/' | tr '\n' ' '
-printf '\n   Formularziel: '
-grep -oE '<form[^>]*action="[^"]*"' "$SEITE" | head -2 | tr '\n' ' '
-printf '\n\n'
+kurz() { cut -c1-170; }
 
-echo "=== 2. Anmelden ==="
-ERGEBNIS=$(curl -s -m 30 -b "$KEKSE" -c "$KEKSE" -o "$SEITE" -w '%{http_code} -> %{redirect_url}' \
-    -X POST "$BASIS/login" \
-    --data-urlencode "_token=$TOKEN" \
-    --data-urlencode "email=$KENNUNG" \
-    --data-urlencode "password=$GEHEIM" \
-    --data-urlencode "remember=on")
-printf '   %s\n\n' "$ERGEBNIS"
+koerper() {
+    python3 -c 'import json,os; print(json.dumps({"email":os.environ["KENNUNG"],"password":os.environ["GEHEIM"]}))'
+}
 
-echo "=== 3. Kekse danach ==="
-awk '!/^#/ && NF >= 7 { printf "   %-28s %d Zeichen\n", $6, length($7) }' "$KEKSE"
-if grep -q fw_login "$KEKSE"; then
-    echo '   -> fw_login ist da. Das ist der Weg.'
-else
-    echo '   -> kein fw_login.'
-fi
+echo "=== 1. Sitzung bei der Schnittstelle holen ==="
+# Über eine oeffentliche Route: geschuetzte geben 401 und setzen keinen
+# Keks. validatepostcode ist folgenlos (forgotpassword wuerde Post schicken).
+curl -s -m 25 -c "$GLAS" -o /dev/null -w "   GET /validatepostcode: HTTP %{http_code}\n" \
+    -H 'Accept: application/json' "$API/validatepostcode?postcode=1220&country=AT"
+# Auch HttpOnly-Kekse zeigen: die stehen mit '#HttpOnly_' am Zeilenanfang,
+# ein naives grep -v '^#' wirft genau sie weg.
+awk 'NF>=7 {printf "   Keks: %-28s %d Zeichen\n", $6, length($7)}' "$GLAS"
 printf '\n'
 
-echo "=== 4. Schnittstelle mit diesen Keksen ==="
-for pfad in person dashboard bikes; do
-    printf '   %-10s ' "$pfad"
-    curl -s -m 25 -b "$KEKSE" -H 'Accept: application/json' \
-        "https://dashboard.radelt.at/api/v2/$pfad" | cut -c1-120
+versuch() {
+    printf '   %-38s ' "$1"
+    shift
+    antwort=$(koerper | curl -s -m 25 -X POST --data-binary @- "$@" "$API/login" \
+              || echo '{"error":"keine Antwort"}')
+    echo "$antwort" | kurz
     printf '\n'
-done
+    case "$antwort" in
+        *'"success":true'*) printf '\n>>> GEHT\n'; exit 0 ;;
+    esac
+    sleep 1
+}
+
+echo "=== 2. Anmelden mit dieser Sitzung ==="
+versuch "mit Sitzungskeks" -b "$GLAS" -c "$GLAS" \
+    -H 'Content-Type: application/json' -H 'Accept: application/json'
+
+echo "=== 3. Dazu die Kopfzeilen, die dio schickt ==="
+versuch "Keks + Dart-Useragent + gzip" -b "$GLAS" -c "$GLAS" \
+    -H 'Content-Type: application/json' -H 'Accept: application/json' \
+    -H 'User-Agent: Dart/3.5 (dart:io)' -H 'Accept-Encoding: gzip'
+
+echo "=== 4. Zugangsdaten als Abfrageparameter ==="
+printf '   %-38s ' "als Query, leerer Koerper"
+curl -s -m 25 -X POST -b "$GLAS" -H 'Accept: application/json' \
+    -H 'Content-Type: application/json' -d '{}' \
+    --get --data-urlencode "email=$KENNUNG" --data-urlencode "password=$GEHEIM" \
+    "$API/login" 2>/dev/null | kurz
 printf '\n'
 
-echo "=== 5. Gegenprobe /api/v2/login ==="
-KENNUNG=$KENNUNG GEHEIM=$GEHEIM python3 -c '
-import json, os
-print(json.dumps({"email": os.environ["KENNUNG"], "password": os.environ["GEHEIM"]}))' \
-| curl -s -m 25 -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
-    --data-binary @- https://dashboard.radelt.at/api/v2/login | cut -c1-160
-printf '\n\nDas Keksglas liegt in %s (nur fuer dich lesbar).\n' "$KEKSE"
-chmod 600 "$KEKSE"
+printf '\nKeine Variante hat success:true geliefert.\n'
