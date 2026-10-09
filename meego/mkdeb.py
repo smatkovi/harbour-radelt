@@ -206,6 +206,25 @@ def main(argv):
         ("control", False, 0o644, ctl.encode("utf-8")),
         ("md5sums", False, 0o644, "".join(md5lines).encode("utf-8")),
     ]
+
+    # digsigsums: ohne diese Liste sagt aegis beim Installieren
+    # "<for> refers to '...', not installed by that package -- ignored"
+    # und vergibt die angeforderte Kennung nicht. Sie nennt je Datei die
+    # beanspruchte Herkunft, den SHA1 und den Pfad -- nachgebaut aus dem
+    # echten modRana-Paket, das auf demselben Weg die Location-Kennung
+    # bekommt. Nur ausfuehrbare Dateien brauchen einen Eintrag.
+    herkunft = "com.nokia.maemo"
+    digsig = []
+    for f in files:
+        voll = os.path.join(root, f)
+        if not (os.stat(voll).st_mode & stat.S_IXUSR):
+            continue
+        with open(voll, "rb") as fh:
+            summe = hashlib.sha1(fh.read()).hexdigest()
+        digsig.append("S %d %s H %d %s R %d %s\n"
+                      % (len(herkunft), herkunft, len(summe), summe, len(f), f))
+    if digsig:
+        ctl_entries.append(("digsigsums", False, 0o644, "".join(digsig).encode("utf-8")))
     for extra in ("preinst", "postinst", "prerm", "postrm"):
         p = os.path.join(root, "DEBIAN", extra)
         if os.path.isfile(p):

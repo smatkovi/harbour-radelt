@@ -35,6 +35,7 @@ APP_SRC="src/api.cpp \
 
 # Headers with a Q_OBJECT in them.
 MOC_HEADERS="src/api.h \
+ src/farben.h \
  src/format.h \
  src/http.h \
  src/recorder.h \

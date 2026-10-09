@@ -1,0 +1,14 @@
+{
+    "wallpaper": "harbour-radelt.jpg",
+    "translationId": "harbour-radelt",
+    "displayName": "Radelt",
+    "favorite": true,
+    "colorScheme": "dark",
+    "highlightColor": "#c00d0d",
+    "secondaryHighlightColor": "#8a0909",
+    "primaryColor": "#ffffff",
+    "secondaryColor": "#b0b0b0",
+    "highlightBackgroundColor": "#c00d0d",
+    "highlightDimmerColor": "#3a0404",
+    "backgroundGlowColor": "#c00d0d"
+}

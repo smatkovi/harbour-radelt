@@ -130,6 +130,22 @@ Page {
                 }
             }
             MenuItem {
+                text: qsTr("Übersicht")
+                onClicked: pageStack.push(Qt.resolvedUrl("OverviewPage.qml"))
+            }
+            MenuItem {
+                text: qsTr("Verlauf")
+                onClicked: pageStack.push(Qt.resolvedUrl("TimelinePage.qml"))
+            }
+            MenuItem {
+                text: qsTr("Community")
+                onClicked: pageStack.push(Qt.resolvedUrl("CommunityPage.qml"))
+            }
+            MenuItem {
+                text: qsTr("Meine Räder")
+                onClicked: pageStack.push(Qt.resolvedUrl("BikesPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Einstellungen")
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
             }

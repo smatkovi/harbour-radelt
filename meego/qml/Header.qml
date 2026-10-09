@@ -8,7 +8,7 @@ Rectangle {
 
     width: parent.width
     height: 72
-    color: "#c00d0d"
+    color: Farben.rot
 
     Label {
         id: label
@@ -17,6 +17,6 @@ Rectangle {
         width: parent.width - 32
         elide: Text.ElideRight
         font.pixelSize: 28
-        color: "white"
+        color: Farben.weiss
     }
 }

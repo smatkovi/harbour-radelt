@@ -29,7 +29,17 @@ class Api : public QObject
     Q_PROPERTY(QString displayName READ displayName NOTIFY personChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QStringList bikes READ bikes NOTIFY bikesChanged)
+    // The bikes with everything the pages show: name, e-bike, main bike.
+    Q_PROPERTY(QVariantList bikeList READ bikeList NOTIFY bikesChanged)
+    Q_PROPERTY(QVariantList friends READ friends NOTIFY communityChanged)
+    Q_PROPERTY(QVariantList organisations READ organisations NOTIFY communityChanged)
+    Q_PROPERTY(QString shareUrl READ shareUrl NOTIFY communityChanged)
     Q_PROPERTY(QVariantMap dashboard READ dashboard NOTIFY dashboardChanged)
+    // Die Jahreszahlen der Übersicht, flach und schon umgerechnet.
+    Q_PROPERTY(QVariantMap yearStats READ yearStats NOTIFY dashboardChanged)
+    Q_PROPERTY(QVariantList months READ months NOTIFY dashboardChanged)
+    Q_PROPERTY(QVariantList timeline READ timeline NOTIFY timelineChanged)
+    Q_PROPERTY(QVariantList trophies READ trophies NOTIFY timelineChanged)
 
 public:
     Api(Settings *settings, RideStore *rides, QObject *parent = 0);
@@ -39,7 +49,15 @@ public:
     QString displayName() const;
     QString lastError() const { return m_lastError; }
     QStringList bikes() const { return m_bikeNames; }
+    QVariantList bikeList() const { return m_bikes; }
+    QVariantList friends() const { return m_friends; }
+    QVariantList organisations() const { return m_organisations; }
+    QString shareUrl() const { return m_shareUrl; }
     QVariantMap dashboard() const { return m_dashboard; }
+    QVariantMap yearStats() const { return m_yearStats; }
+    QVariantList months() const { return m_months; }
+    QVariantList timeline() const { return m_timeline; }
+    QVariantList trophies() const { return m_trophies; }
 
 public slots:
     void login(const QString &user, const QString &password);
@@ -52,12 +70,27 @@ public slots:
     void uploadPending();
     void refresh();                     // dashboard and bikes
 
+    // Bikes. The platform keeps one "main" bike that every ride falls back
+    // to; a bike that already carries rides cannot be deleted, only
+    // deactivated, which is why the list hands those flags to the page.
+    void saveBike(const QVariantMap &bike);
+    void deleteBike(qlonglong bikeId);
+
+    // Community: the friends one rides against, and the organisations one
+    // rides for.
+    void fetchCommunity();
+
+    // Verlauf und Trophäen für die Verlaufsseite.
+    void fetchTimeline();
+
 signals:
     void loggedInChanged();
     void busyChanged();
     void personChanged();
     void lastErrorChanged();
     void bikesChanged();
+    void communityChanged();
+    void timelineChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
     // The server says this app is too old for it; the pages show a hint.
@@ -69,7 +102,9 @@ private slots:
 
 private:
     enum Kind { LoginRequest, PersonRequest, BikesRequest, DashboardRequest,
-                RideSaveRequest, TrackSaveRequest };
+                RideSaveRequest, TrackSaveRequest, BikeSaveRequest,
+                BikeDeleteRequest, FriendsRequest, OrganisationsRequest,
+                ShareUrlRequest, TimelineRequest, TrophiesRequest };
 
     struct Pending
     {
@@ -94,6 +129,14 @@ private:
     QVariantMap m_dashboard;
     QStringList m_bikeNames;
     QList<qlonglong> m_bikeIds;
+    QVariantList m_bikes;
+    QVariantList m_friends;
+    QVariantList m_organisations;
+    QString m_shareUrl;
+    QVariantMap m_yearStats;
+    QVariantList m_months;
+    QVariantList m_timeline;
+    QVariantList m_trophies;
     QString m_token;
     QString m_lastError;
     QStringList m_queue;                // ride ids waiting to go up

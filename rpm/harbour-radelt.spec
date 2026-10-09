@@ -1,6 +1,6 @@
 Name:       harbour-radelt
 Summary:    Kilometres for Österreich radelt
-Version:    0.1.0
+Version:    0.2.0
 Release:    1
 Group:      Qt/Qt
 License:    GPLv3
@@ -49,3 +49,4 @@ desktop-file-install --delete-original \
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+%{_datadir}/ambience/%{name}

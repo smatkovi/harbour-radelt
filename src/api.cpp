@@ -115,10 +115,20 @@ void Api::logout()
     m_dashboard.clear();
     m_bikeNames.clear();
     m_bikeIds.clear();
+    m_bikes.clear();
+    m_friends.clear();
+    m_organisations.clear();
+    m_shareUrl.clear();
+    m_yearStats.clear();
+    m_months.clear();
+    m_timeline.clear();
+    m_trophies.clear();
     m_settings->setToken(QString());
     emit personChanged();
     emit dashboardChanged();
     emit bikesChanged();
+    emit communityChanged();
+    emit timelineChanged();
 }
 
 void Api::resume()
@@ -137,6 +147,49 @@ void Api::refresh()
         return;
     send(DashboardRequest, "GET", "/dashboard", QVariantMap());
     send(BikesRequest, "GET", "/bikes", QVariantMap());
+}
+
+void Api::saveBike(const QVariantMap &bike)
+{
+    if (!loggedIn())
+        return;
+    // The fields are the ones the platform hands out in /bikes; an entry
+    // without an id is a new bike.
+    QVariantMap body;
+    if (bike.value("id").toLongLong() > 0)
+        body.insert("id", bike.value("id").toLongLong());
+    body.insert("name", bike.value("name").toString());
+    body.insert("isEbike", bike.value("isEbike").toBool());
+    body.insert("isMain", bike.value("isMain").toBool());
+    body.insert("entryType", bike.value("entryType").toString().isEmpty()
+                             ? QString("DISTANCE") : bike.value("entryType").toString());
+    send(BikeSaveRequest, "POST", "/bike/save", body);
+}
+
+void Api::deleteBike(qlonglong bikeId)
+{
+    if (!loggedIn() || bikeId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("id", bikeId);
+    send(BikeDeleteRequest, "DELETE", "/bike/delete", body);
+}
+
+void Api::fetchCommunity()
+{
+    if (!loggedIn())
+        return;
+    send(FriendsRequest, "GET", "/friends", QVariantMap());
+    send(OrganisationsRequest, "GET", "/organisations/preferred", QVariantMap());
+    send(ShareUrlRequest, "GET", "/friends/getshareurl", QVariantMap());
+}
+
+void Api::fetchTimeline()
+{
+    if (!loggedIn())
+        return;
+    send(TimelineRequest, "GET", "/timelineevents", QVariantMap());
+    send(TrophiesRequest, "GET", "/trophies", QVariantMap());
 }
 
 void Api::uploadRide(const QString &rideId)
@@ -332,24 +385,93 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
     case BikesRequest: {
         m_bikeNames.clear();
         m_bikeIds.clear();
+        m_bikes.clear();
         QVariantList list = data.toList();
         if (list.isEmpty())
             list = map.value("bikes").toList();
         for (int i = 0; i < list.size(); ++i) {
             // Measured against the real answer (doc/api-echte-antworten.md):
-            // a bike is { id, name, entryType, isEbike, isMain, ... }.
+            // a bike is { id, name, entryType, isEbike, isMain,
+            // canBeDeleted, isBikeDeactivateable, isActive, ... }.
             const QVariantMap bike = list.at(i).toMap();
             const QString name = bike.value("name").toString();
             m_bikeNames << (name.isEmpty() ? tr("Bike %1").arg(i + 1) : name);
             m_bikeIds << bike.value("id").toLongLong();
+            m_bikes << bike;
         }
         emit bikesChanged();
         break;
     }
-    case DashboardRequest:
+    case BikeSaveRequest:
+    case BikeDeleteRequest:
+        // The server is the authority on the list; ask it again rather
+        // than patching our copy and hoping it matches.
+        send(BikesRequest, "GET", "/bikes", QVariantMap());
+        break;
+    case FriendsRequest:
+        m_friends = map.value("friends").toList();
+        if (m_friends.isEmpty())
+            m_friends = data.toList();
+        emit communityChanged();
+        break;
+    case OrganisationsRequest:
+        m_organisations = map.value("organisations").toList();
+        if (m_organisations.isEmpty())
+            m_organisations = data.toList();
+        emit communityChanged();
+        break;
+    case ShareUrlRequest:
+        m_shareUrl = map.value("shareUrl").toString();
+        emit communityChanged();
+        break;
+    case DashboardRequest: {
         m_dashboard = map;
+        // Die Jahresstatistik steckt unter dem Jahr als Schlüssel, und die
+        // Monate darunter noch einmal unter ihrem ersten Tag. Beides wird
+        // hier flach gemacht, damit die Seite nicht raten muss, welches
+        // Jahr das laufende ist. Die Schlüssel sind hier snake_case --
+        // anders als im Rest der Schnittstelle, gemessen.
+        m_yearStats.clear();
+        m_months.clear();
+        const QVariantMap jahre = map.value("yearlyStatistics").toMap();
+        if (!jahre.isEmpty()) {
+            // Das höchste Jahr ist das laufende; QVariantMap sortiert nach
+            // Schlüssel, also ist der letzte der richtige.
+            const QString jahr = jahre.keys().last();
+            m_yearStats = jahre.value(jahr).toMap();
+            m_yearStats.insert("year", jahr);
+            const QVariantMap monate = m_yearStats.value("months").toMap();
+            for (QVariantMap::const_iterator it = monate.constBegin();
+                 it != monate.constEnd(); ++it) {
+                QVariantMap eintrag = it.value().toMap();
+                eintrag.insert("month", it.key());
+                m_months << eintrag;
+            }
+            m_yearStats.remove("months");
+        }
+        // Das Dashboard liefert nebenbei einen frischen Token mit.
+        const QString frisch = map.value("apiToken").toString();
+        if (!frisch.isEmpty())
+            setToken(frisch);
         emit dashboardChanged();
         break;
+    }
+    case TimelineRequest: {
+        m_timeline = data.toList();
+        if (m_timeline.isEmpty())
+            m_timeline = map.value("timeline").toList();
+        if (m_timeline.isEmpty())
+            m_timeline = map.value("events").toList();
+        emit timelineChanged();
+        break;
+    }
+    case TrophiesRequest: {
+        m_trophies = data.toList();
+        if (m_trophies.isEmpty())
+            m_trophies = map.value("trophies").toList();
+        emit timelineChanged();
+        break;
+    }
     case RideSaveRequest: {
         qlonglong remoteId = map.value("rideId").toLongLong();
         if (!remoteId)

@@ -11,7 +11,8 @@ Column {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: large ? Theme.fontSizeHuge : Theme.fontSizeLarge
-        color: Theme.highlightColor
+        // Hausrot statt Theme-Highlight: die Zahlen sind das, was zählt.
+        color: Farben.rot
         text: value
     }
     Label {

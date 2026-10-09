@@ -16,6 +16,7 @@
 #include <QTranslator>
 
 #include "api.h"
+#include "farben.h"
 #include "format.h"
 #include "recorder.h"
 #include "ridestore.h"
@@ -51,6 +52,7 @@ int main(int argc, char *argv[])
     rides.setRecorder(&recorder);
     Api api(&settings, &rides);
     Format format;
+    Farben farben;
 
     QDeclarativeView view;
     QDeclarativeContext *context = view.rootContext();
@@ -59,6 +61,7 @@ int main(int argc, char *argv[])
     context->setContextProperty("Api", &api);
     context->setContextProperty("Settings", &settings);
     context->setContextProperty("Format", &format);
+    context->setContextProperty("Farben", &farben);
 
     view.setResizeMode(QDeclarativeView::SizeRootObjectToView);
     view.setSource(QUrl::fromLocalFile(qmlFile()));

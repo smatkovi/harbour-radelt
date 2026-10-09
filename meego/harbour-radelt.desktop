@@ -1,8 +1,17 @@
 [Desktop Entry]
+Encoding=UTF-8
+Version=1.0
 Type=Application
 Name=Radelt
+Comment=Kilometer für Österreich radelt
+# Der volle Pfad, nicht der Themenname: mit einem blossen "harbour-radelt"
+# findet die Startansicht das Symbol nicht und setzt ein Ersatzquadrat hin.
 Icon=/usr/share/icons/hicolor/80x80/apps/harbour-radelt.png
-Exec=/usr/bin/invoker --type=d -s /opt/harbour-radelt/bin/harbour-radelt
-X-Window-Icon=harbour-radelt
-X-HildonDesk-ShowInToolbar=true
-X-Osso-Type=application/x-executable;
+# Direkt, nicht ueber "invoker --type=d": der Booster erwartet ein dafuer
+# uebersetztes Programm (qdeclarative-boostable, als Bibliothek gebaut).
+# Ein gewoehnliches Binaer startet er nicht -- genau daran ging die App am
+# N950 nicht auf. Die anderen eigenen Harmattan-Ports machen es genauso.
+Exec=/opt/harbour-radelt/bin/harbour-radelt
+Terminal=false
+Categories=Utility;
+X-Osso-Type=application/x-executable

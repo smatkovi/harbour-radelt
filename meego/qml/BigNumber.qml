@@ -10,14 +10,14 @@ Column {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: large ? 72 : 40
-        color: "#c00d0d"
+        color: Farben.rot
         text: value
     }
     Label {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: 20
-        color: "#8c8c8c"
+        color: Farben.grau
         wrapMode: Text.WordWrap
         text: unit
     }
