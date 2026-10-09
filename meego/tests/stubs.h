@@ -145,6 +145,8 @@ class StubApi : public QObject
     Q_PROPERTY(QVariantList organisations READ vlist NOTIFY communityChanged)
     Q_PROPERTY(QString shareUrl READ text NOTIFY communityChanged)
     Q_PROPERTY(QVariantList foundPeople READ vlist NOTIFY searchChanged)
+    Q_PROPERTY(QVariantList foundOrganisations READ vlist NOTIFY organisationSearchChanged)
+    Q_PROPERTY(bool searchingOrganisations READ flag NOTIFY organisationSearchChanged)
     Q_PROPERTY(bool searching READ flag NOTIFY searchChanged)
     Q_PROPERTY(QVariantMap dashboard READ map NOTIFY dashboardChanged)
     Q_PROPERTY(QVariantList openChallenges READ vlist NOTIFY challengesChanged)
@@ -201,6 +203,11 @@ public:
     Q_INVOKABLE void acceptFriend(qlonglong) {}
     Q_INVOKABLE void declineFriend(qlonglong) {}
     Q_INVOKABLE void removeFriend(qlonglong) {}
+    Q_INVOKABLE void searchOrganisations(const QString &, const QString &) {}
+    Q_INVOKABLE void setPreferredOrganisations(const QVariantList &) {}
+    Q_INVOKABLE void addOrganisation(qlonglong) {}
+    Q_INVOKABLE void removeOrganisation(qlonglong) {}
+    Q_INVOKABLE bool ridesFor(qlonglong) const { return false; }
 public slots:
     void login(const QString &, const QString &) {}
     void logout() {}
@@ -221,6 +228,7 @@ signals:
     void bikesChanged();
     void communityChanged();
     void searchChanged();
+    void organisationSearchChanged();
     void timelineChanged();
     void challengesChanged();
     void newsChanged();

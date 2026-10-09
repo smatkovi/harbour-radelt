@@ -86,6 +86,10 @@ ThemedPage {
                 onClicked: pageStack.push(Qt.resolvedUrl("TimelinePage.qml"))
             }
             MenuItem {
+                text: qsTr("Für wen ich fahre")
+                onClicked: pageStack.push(Qt.resolvedUrl("OrganisationsPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Community")
                 onClicked: pageStack.push(Qt.resolvedUrl("CommunityPage.qml"))
             }

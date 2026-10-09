@@ -182,6 +182,24 @@ static void testLoginSignature()
     // Fester Sollwert: md5("probe" + "geheim" + "TourDeBoedele").
     check(secure == QLatin1String("49c51e15e64e28ecd6c5a24f8b347117"),
           "Signatur trifft den Sollwert -- sonst lehnt der Server jede Anmeldung ab");
+
+    // Und der Grund, warum die Anmeldung am 09.10.2026 nicht mehr ging:
+    // die Signatur ist empfindlich gegen die Schreibweise der Kennung,
+    // der Server beim Nachschlagen aber nicht. Ein grosser
+    // Anfangsbuchstabe von der Tastatur reicht also fuer
+    // authentication_failed, obwohl alles stimmt. Deshalb schneidet
+    // Api::sendLogin() Leerzeichen ab und fasst einmal klein geschrieben
+    // nach.
+    const QByteArray gross = QByteArray("Probe") + "geheim" + "TourDeBoedele";
+    const QString andere = QString::fromLatin1(
+        QCryptographicHash::hash(gross, QCryptographicHash::Md5).toHex());
+    check(andere != secure,
+          "grosser Anfangsbuchstabe ergibt eine andere Signatur");
+
+    // Dasselbe gilt fuer ein angehaengtes Leerzeichen.
+    const QByteArray mitLeer = QByteArray("probe ") + "geheim" + "TourDeBoedele";
+    check(QString::fromLatin1(QCryptographicHash::hash(mitLeer, QCryptographicHash::Md5).toHex())
+          != secure, "angehaengtes Leerzeichen ergibt eine andere Signatur");
 }
 
 // Der eine Dreher, der jeden Ort stillschweigend ins Meer setzen wuerde:

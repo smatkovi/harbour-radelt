@@ -68,6 +68,8 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
     m_collectLon(0),
     m_collecting(false),
     m_searching(false),
+    m_searchingOrganisations(false),
+    m_loginRetried(false),
     m_nextTag(1),
     m_open(0)
 {
@@ -136,6 +138,14 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
 
 void Api::login(const QString &user, const QString &password)
 {
+    // Der Einstieg aus der Oberflaeche: ein frischer Versuch, also auch
+    // ein frisches Recht auf den einen Wiederholversuch.
+    m_loginRetried = false;
+    sendLogin(user, password);
+}
+
+void Api::sendLogin(const QString &user, const QString &password)
+{
     setError(QString());
 
     // Der Anmelde-Koerper stammt aus dem rekonstruierten Dart-Abbild der
@@ -147,13 +157,21 @@ void Api::login(const QString &user, const QString &password)
     //   * Es gibt eine Signatur "secure" ueber Kennung und Passwort mit
     //     einem festen Salz. Ohne sie antwortet der Server auf jeden
     //     Versuch mit authentication_failed, egal wie richtig der Rest ist.
-    const QByteArray roh = (user + password + QLatin1String(LoginSalt)).toUtf8();
+    // Die Signatur geht buchstabengetreu ueber die Kennung. Ein
+    // Leerzeichen, das die Tastatur anhaengt, macht sie damit genauso
+    // kaputt wie ein grosser Anfangsbuchstabe -- und beides sieht man im
+    // Feld nicht.
+    const QString kennung = user.trimmed();
+    m_loginUser = kennung;
+    m_loginPassword = password;
+
+    const QByteArray roh = (kennung + password + QLatin1String(LoginSalt)).toUtf8();
     const QString secure =
         QString::fromLatin1(QCryptographicHash::hash(roh, QCryptographicHash::Md5).toHex());
 
     QVariantMap body;
     body.insert("secure", secure);
-    body.insert("user", user);
+    body.insert("user", kennung);
     body.insert("password", password);
     // Kein Push-Dienst in dieser App; das Feld gehoert aber in den Koerper.
     body.insert("oneSignalUserId", QVariant());
@@ -165,7 +183,9 @@ void Api::login(const QString &user, const QString &password)
     body.insert("appVersion", ProtocolVersion);
     body.insert("language", QLocale::system().name().left(2));
 
-    m_settings->setEmail(user);
+    // **Nicht** hier merken: eine Kennung, mit der die Anmeldung
+    // scheitert, bot das Feld sonst beim naechsten Mal wieder an, und man
+    // kommt nicht mehr hinein. Gemerkt wird erst, was gegolten hat.
     send(LoginRequest, "POST", "/login", body);
 }
 
@@ -182,6 +202,8 @@ void Api::logout()
     m_bikes.clear();
     m_friends.clear();
     m_organisations.clear();
+    m_foundOrganisations.clear();
+    m_searchingOrganisations = false;
     m_shareUrl.clear();
     m_yearStats.clear();
     m_months.clear();
@@ -200,6 +222,9 @@ void Api::logout()
     m_poiRoutes.clear();
     m_pois.clear();
     m_poiMessage.clear();
+    m_loginUser.clear();
+    m_loginPassword.clear();
+    m_loginRetried = false;
     m_settings->setToken(QString());
     emit personChanged();
     emit dashboardChanged();
@@ -262,6 +287,72 @@ void Api::fetchCommunity()
     send(FriendsRequest, "GET", "/friends", QVariantMap());
     send(OrganisationsRequest, "GET", "/organisations/preferred", QVariantMap());
     send(ShareUrlRequest, "GET", "/friends/getshareurl", QVariantMap());
+}
+
+// --- Fuer wen gefahren wird -------------------------------------------------
+//
+// Die Plattform schreibt die Kilometer einer oder mehreren Organisationen
+// zu. Der Dienst kennt dafuer nur die ganze Liste: wer eine dazunimmt,
+// schickt alle mit. Am Server nachgemessen, der Schreibweg mit genau der
+// vorhandenen Liste als Leerlauf geprueft (doc/api.md §13).
+
+void Api::searchOrganisations(const QString &text, const QString &art)
+{
+    if (!loggedIn())
+        return;
+    QString pfad = "/organisations?limit=60";
+    const QString suche = text.trimmed();
+    if (!suche.isEmpty())
+        pfad += "&query=" + QString::fromLatin1(QUrl::toPercentEncoding(suche));
+    // Die fuenf Arten stehen im Binaer und sind am Dienst geprueft; etwas
+    // anderes beantwortet er mit wrong_organisation_category, deshalb
+    // wird nur weitergegeben, was gesetzt ist.
+    if (!art.isEmpty())
+        pfad += "&type=" + art;
+    m_searchingOrganisations = true;
+    emit organisationSearchChanged();
+    send(OrganisationSearchRequest, "GET", pfad, QVariantMap());
+}
+
+void Api::setPreferredOrganisations(const QVariantList &ids)
+{
+    if (!loggedIn())
+        return;
+    QVariantMap body;
+    body.insert("organisationIds", ids);
+    send(OrganisationSaveRequest, "PUT", "/organisations/preferred", body);
+}
+
+bool Api::ridesFor(qlonglong id) const
+{
+    for (int i = 0; i < m_organisations.size(); ++i)
+        if (m_organisations.at(i).toMap().value("id").toLongLong() == id)
+            return true;
+    return false;
+}
+
+void Api::addOrganisation(qlonglong id)
+{
+    if (id <= 0 || ridesFor(id))
+        return;
+    QVariantList ids;
+    for (int i = 0; i < m_organisations.size(); ++i)
+        ids << m_organisations.at(i).toMap().value("id");
+    ids << id;
+    setPreferredOrganisations(ids);
+}
+
+void Api::removeOrganisation(qlonglong id)
+{
+    if (id <= 0)
+        return;
+    QVariantList ids;
+    for (int i = 0; i < m_organisations.size(); ++i) {
+        const QVariant vorhanden = m_organisations.at(i).toMap().value("id");
+        if (vorhanden.toLongLong() != id)
+            ids << vorhanden;
+    }
+    setPreferredOrganisations(ids);
 }
 
 void Api::fetchTimeline()
@@ -822,7 +913,35 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         }
         if (message.isEmpty())
             message = tr("The server refused the request");
+
+        // Die Anmelde-Signatur geht buchstabengetreu ueber die Kennung.
+        // Schreibt die Tastatur den ersten Buchstaben gross, lehnt der
+        // Server ab, obwohl Kennung und Passwort stimmen -- genau das ist
+        // am 09.10.2026 passiert. Also genau einmal klein geschrieben
+        // nachfassen, bevor die Absage angezeigt wird. Blind klein
+        // schreiben waere falsch: ein Benutzername darf Grossbuchstaben
+        // haben, und dann ist der erste Versuch der richtige.
+        if (pending.kind == LoginRequest && !m_loginRetried
+            && envelope.value("error").toString() == QLatin1String("authentication_failed")
+            && m_loginUser != m_loginUser.toLower()
+            && !m_loginPassword.isEmpty()) {
+            m_loginRetried = true;
+            const QString klein = m_loginUser.toLower();
+            const QString geheim = m_loginPassword;
+            sendLogin(klein, geheim);
+            return;
+        }
+        if (pending.kind == LoginRequest) {
+            m_loginRetried = false;
+            m_loginPassword.clear();
+        }
+
         setError(message);
+        if (pending.kind == OrganisationSearchRequest) {
+            m_foundOrganisations.clear();
+            m_searchingOrganisations = false;
+            emit organisationSearchChanged();
+        }
         if (pending.kind == SearchRequest) {
             m_found.clear();
             m_searching = false;
@@ -850,10 +969,17 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (!token.isEmpty())
             setToken(token);
         if (!loggedIn()) {
+            m_loginRetried = false;
+            m_loginPassword.clear();
             setError(tr("The server sent no token"));
             qWarning() << "radelt: login answer without a token" << map.keys();
             return;
         }
+        // Erst jetzt merken -- und zwar die Schreibweise, die wirklich
+        // gegolten hat, nicht die getippte.
+        m_settings->setEmail(m_loginUser);
+        m_loginRetried = false;
+        m_loginPassword.clear();
         if (map.contains("person"))
             m_person = map.value("person").toMap();
         else
@@ -897,6 +1023,22 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (m_friends.isEmpty())
             m_friends = data.toList();
         emit communityChanged();
+        break;
+    case OrganisationSearchRequest:
+        m_foundOrganisations = map.value("organisations").toList();
+        if (m_foundOrganisations.isEmpty())
+            m_foundOrganisations = data.toList();
+        m_searchingOrganisations = false;
+        emit organisationSearchChanged();
+        break;
+    case OrganisationSaveRequest:
+        // Der Dienst antwortet mit der neuen Auswahl -- die ist die
+        // Wahrheit, nicht die Liste, die wir hingeschickt haben.
+        m_organisations = map.value("organisations").toList();
+        if (m_organisations.isEmpty() && map.contains("organisations"))
+            m_organisations = QVariantList();
+        emit communityChanged();
+        emit organisationSearchChanged();   // ridesFor() hat sich geaendert
         break;
     case OrganisationsRequest:
         m_organisations = map.value("organisations").toList();

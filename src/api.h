@@ -33,7 +33,11 @@ class Api : public QObject
     // The bikes with everything the pages show: name, e-bike, main bike.
     Q_PROPERTY(QVariantList bikeList READ bikeList NOTIFY bikesChanged)
     Q_PROPERTY(QVariantList friends READ friends NOTIFY communityChanged)
+    // Für wen gefahren wird: die Organisationen, denen die Kilometer
+    // zugeschrieben werden (Gemeinde, Betrieb, Schule, Verein, Uni).
     Q_PROPERTY(QVariantList organisations READ organisations NOTIFY communityChanged)
+    Q_PROPERTY(QVariantList foundOrganisations READ foundOrganisations NOTIFY organisationSearchChanged)
+    Q_PROPERTY(bool searchingOrganisations READ searchingOrganisations NOTIFY organisationSearchChanged)
     Q_PROPERTY(QString shareUrl READ shareUrl NOTIFY communityChanged)
     Q_PROPERTY(QVariantList foundPeople READ foundPeople NOTIFY searchChanged)
     Q_PROPERTY(bool searching READ searching NOTIFY searchChanged)
@@ -71,6 +75,8 @@ public:
     QVariantList bikeList() const { return m_bikes; }
     QVariantList friends() const { return m_friends; }
     QVariantList organisations() const { return m_organisations; }
+    QVariantList foundOrganisations() const { return m_foundOrganisations; }
+    bool searchingOrganisations() const { return m_searchingOrganisations; }
     QString shareUrl() const { return m_shareUrl; }
     QVariantList foundPeople() const { return m_found; }
     bool searching() const { return m_searching; }
@@ -94,6 +100,12 @@ public:
     QVariantList notifications() const { return m_notifications; }
 
 public slots:
+    // Die Kennung wird buchstabengetreu in die Signatur gerechnet. Ein
+    // grosser Anfangsbuchstabe von der Tastatur reicht also, damit der
+    // Server authentication_failed sagt -- und genau das war am
+    // 09.10.2026 der Grund, warum die Anmeldung auf dem Telefon nicht
+    // mehr ging. Darum: Leerzeichen abschneiden und bei einem
+    // Fehlschlag genau einmal klein geschrieben nachfassen.
     void login(const QString &user, const QString &password);
     void logout();
     // Picks the stored token back up at start; does not ask the network
@@ -113,6 +125,21 @@ public slots:
     // Community: the friends one rides against, and the organisations one
     // rides for.
     void fetchCommunity();
+
+    // Für wen gefahren wird. Am Server nachgemessen (doc/api.md §13):
+    // GET /organisations/preferred liefert die eigene Auswahl,
+    // PUT /organisations/preferred nimmt {"organisationIds": [...]} und
+    // antwortet mit der neuen Auswahl. Die Suche ist
+    // GET /organisations?query=&type=&limit= -- und sie nimmt genau fünf
+    // Arten: MUNICIPALITY, WORKPLACE, SCHOOL, ASSOCIATION, UNIVERSITY.
+    // Alles andere lehnt der Dienst mit wrong_organisation... ab.
+    Q_INVOKABLE void searchOrganisations(const QString &text, const QString &art);
+    Q_INVOKABLE void setPreferredOrganisations(const QVariantList &ids);
+    // Die beiden bequemen Wege: eine dazu, eine weg. Der Dienst kennt nur
+    // die ganze Liste, also wird sie hier aus der bekannten gebildet.
+    Q_INVOKABLE void addOrganisation(qlonglong id);
+    Q_INVOKABLE void removeOrganisation(qlonglong id);
+    Q_INVOKABLE bool ridesFor(qlonglong id) const;
 
     // Verlauf und Trophäen für die Verlaufsseite.
     void fetchTimeline();
@@ -210,6 +237,7 @@ signals:
     void bikesChanged();
     void communityChanged();
     void searchChanged();
+    void organisationSearchChanged();
     void timelineChanged();
     void journeyLogsChanged();
     void poisChanged();
@@ -235,7 +263,8 @@ private:
                 RideUpdateRequest, RideDeleteRequest, NewsRequest,
                 SponsorsRequest, NotificationsRequest, GoalsRequest,
                 GoalActionRequest, JourneyLogsRequest, JourneyLogActionRequest,
-                PoisRequest, PoiCollectRequest, PoiFoundRequest };
+                PoisRequest, PoiCollectRequest, PoiFoundRequest,
+                OrganisationSearchRequest, OrganisationSaveRequest };
 
     struct Pending
     {
@@ -252,6 +281,10 @@ private:
     void setError(const QString &text);
     void setToken(const QString &token);
     void handleEnvelope(const Pending &pending, const QVariantMap &envelope);
+    // Baut den Anmelde-Koerper und schickt ihn. Getrennt von login(),
+    // damit der Wiederholversuch die Marke m_loginRetried nicht wieder
+    // auf falsch setzt und endlos im Kreis laeuft.
+    void sendLogin(const QString &user, const QString &password);
     void sendTrack(const QString &rideId, qlonglong remoteId);
     qlonglong bikeIdFor(const QString &name) const;
 
@@ -266,6 +299,8 @@ private:
     QVariantList m_bikes;
     QVariantList m_friends;
     QVariantList m_organisations;
+    QVariantList m_foundOrganisations;
+    bool m_searchingOrganisations;
     QString m_shareUrl;
     QVariantMap m_yearStats;
     QVariantList m_months;
@@ -294,6 +329,13 @@ private:
     QString m_token;
     QString m_lastError;
     QStringList m_queue;                // ride ids waiting to go up
+    // Fuer den einen Wiederholversuch mit klein geschriebener Kennung.
+    // Das Passwort steht hier nur zwischen Absenden und Antwort und wird
+    // danach ueberschrieben -- waehrend der Anfrage liegt es ohnehin im
+    // Speicher.
+    QString m_loginUser;
+    QString m_loginPassword;
+    bool m_loginRetried;
     int m_nextTag;
     int m_open;
 };

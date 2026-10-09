@@ -59,6 +59,7 @@ DISTFILES += \
     qml/pages/FahrtenbuchPage.qml \
     qml/pages/OrtePage.qml \
     qml/pages/OrtPage.qml \
+    qml/pages/OrganisationsPage.qml \
     qml/components/BigNumber.qml \
     qml/components/ThemedPage.qml \
 

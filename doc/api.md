@@ -636,3 +636,66 @@ Im Original gibt es nachweislich keinen solchen Filter: `gps_tracking_cubit`
 holt über `calculateBounds` die nicht eingesammelten Orte und meldet sie nur
 weiter; `putPoisFound` hängt an `redeemQrCode` (QR-Code am Ort) und an
 `poisFound`. Zwischen Holen und Melden filtert nichts nach Entfernung.
+
+## 13. Anmeldung: die Schreibweise der Kennung  `[GEMESSEN]`
+
+**Die Signatur `secure` geht buchstabengetreu über die Kennung.** Die Plattform
+rechnet `md5Hex(user + password + "TourDeBoedele")`; wird die Kennung anders
+geschrieben als sie dort hinterlegt ist, kommt eine andere Signatur heraus und
+der Dienst antwortet `authentication_failed` — **obwohl Kennung und Passwort
+stimmen**. Der Server vergleicht die Kennung also unempfindlich gegen
+Groß- und Kleinschreibung, die Signatur aber nicht.
+
+Das war am 09.10.2026 der Grund, warum die Anmeldung am Telefon nicht mehr ging:
+die Bildschirmtastatur hatte `Sebastian.…` mit großem Anfangsbuchstaben
+eingesetzt (das Feld trägt `Qt.ImhNoAutoUppercase`, es passierte trotzdem).
+Dasselbe gilt für ein angehängtes Leerzeichen.
+
+Verschärft hat es die App selbst: sie merkte die Kennung **vor** dem Absenden.
+Eine Schreibweise, mit der die Anmeldung scheitert, bot das Feld damit beim
+nächsten Mal wieder an — und man kam nicht mehr hinein. Seit 0.8.2:
+
+* Die Kennung wird mit `trimmed()` von Leerzeichen befreit.
+* Scheitert die Anmeldung mit `authentication_failed` und ist die Kennung nicht
+  schon klein geschrieben, wird **genau einmal** klein geschrieben nachgefasst.
+  Blind klein schreiben wäre falsch: ein Benutzername darf Großbuchstaben haben,
+  und dann ist der erste Versuch der richtige.
+* Gemerkt wird erst die Schreibweise, die **gegolten** hat.
+
+## 14. Für wen gefahren wird  `[GEMESSEN]`
+
+| Zweck | Methode | Pfad |
+|---|---|---|
+| meine Auswahl | GET | `/organisations/preferred` |
+| Auswahl setzen | PUT | `/organisations/preferred` |
+| suchen | GET | `/organisations?query=&type=&limit=&offset=&challengeId=` |
+
+Der Schreibkörper ist `UpdateOrganizationsRequest`, ein einziges Feld:
+
+```json
+{ "organisationIds": [5555] }
+```
+
+Der Dienst kennt nur die **ganze** Liste: wer eine Organisation dazunimmt,
+schickt alle mit. Die Antwort trägt die neue Auswahl — sie ist die Wahrheit,
+nicht die hingeschickte Liste. Geprüft wurde der Schreibweg als Leerlauf, also
+mit genau der vorhandenen Auswahl; sie war danach unverändert.
+
+Eine Organisation kommt so:
+
+```json
+{ "id": 5555, "name": "22. Bezirk: Donaustadt, 1220 Wien",
+  "type": "MUNICIPALITY", "logo": "https://…jpeg", "website": null }
+```
+
+`type` nimmt **genau fünf** Werte, am Dienst durchprobiert:
+
+| Wert | deutsch | Antwort auf etwas anderes |
+|---|---|---|
+| `MUNICIPALITY` | Gemeinde | `COMPANY`, `KINDERGARTEN`, `OTHER` → `success:false`, |
+| `WORKPLACE` | Betrieb | `error: wrong_organisation_category`, |
+| `SCHOOL` | Schule | Meldung „Ungültige Veranstalterkategorie" |
+| `ASSOCIATION` | Verein | |
+| `UNIVERSITY` | Universität | |
+
+Also nicht `COMPANY` raten — der naheliegende Name ist der falsche.
