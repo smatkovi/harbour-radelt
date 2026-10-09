@@ -51,6 +51,13 @@ class Api : public QObject
     Q_PROPERTY(QVariantMap yearStats READ yearStats NOTIFY dashboardChanged)
     Q_PROPERTY(QVariantList months READ months NOTIFY dashboardChanged)
     Q_PROPERTY(QVariantList timeline READ timeline NOTIFY timelineChanged)
+    // Fahrtenbuch: die eingetragenen Radeltage einer Aktion.
+    Q_PROPERTY(QVariantList journeyLogs READ journeyLogs NOTIFY journeyLogsChanged)
+    Q_PROPERTY(qlonglong journeyChallenge READ journeyChallenge NOTIFY journeyLogsChanged)
+    // Orte sammeln: die Strecken einer Aktion und ihre Orte, flach dazu.
+    Q_PROPERTY(QVariantList poiRoutes READ poiRoutes NOTIFY poisChanged)
+    Q_PROPERTY(QVariantList pois READ pois NOTIFY poisChanged)
+    Q_PROPERTY(QString poiMessage READ poiMessage NOTIFY poisChanged)
     Q_PROPERTY(QVariantList trophies READ trophies NOTIFY timelineChanged)
 
 public:
@@ -72,6 +79,11 @@ public:
     QVariantList months() const { return m_months; }
     QVariantList timeline() const { return m_timeline; }
     QVariantList trophies() const { return m_trophies; }
+    QVariantList journeyLogs() const { return m_journeyLogs; }
+    qlonglong journeyChallenge() const { return m_journeyChallenge; }
+    QVariantList poiRoutes() const { return m_poiRoutes; }
+    QVariantList pois() const { return m_pois; }
+    QString poiMessage() const { return m_poiMessage; }
     QVariantList openChallenges() const { return m_openChallenges; }
     QVariantList myChallenges() const { return m_myChallenges; }
     QVariantList goals() const { return m_goals; }
@@ -105,16 +117,55 @@ public slots:
     // Verlauf und Trophäen für die Verlaufsseite.
     void fetchTimeline();
 
-    // Aktionen ("Kampagnen"). Ohne Teilnahme an einer laufenden Aktion
-    // bleiben Ziele, Fahrtenbuch und Radeltage leer -- der Dienst
-    // antwortet dort sonst mit challenge_not_found.
+    // Aktionen ("Kampagnen"). Fahrtenbuch und Orte haengen an einer
+    // Aktion -- ohne Aktionskennung antwortet der Dienst dort mit
+    // challenge_not_found. Ziele dagegen gehen auch ohne Aktion, das ist
+    // am Server nachgemessen (doc/api.md).
     Q_INVOKABLE void fetchChallenges();
     Q_INVOKABLE void joinChallenge(qlonglong challengeId);
     Q_INVOKABLE void leaveChallenge(qlonglong challengeId);
 
-    // "Ich bin heute geradelt": Radeltage zu einer Aktion eintragen.
-    // Im Binär heißt das SaveRzaRequest (Radelt zur Arbeit).
+    // Fahrtenbuch ("Radelt zur Arbeit"). Im Binär sind das drei Routen um
+    // denselben Körper: GET /journeylogs?challengeId=N, PUT
+    // /journeylog/save und DELETE /journeylog/delete. Alle drei nehmen
+    // {challengeId, dates, countDay} -- DeleteRzaRequest::toJson ruft im
+    // Binär wörtlich _$SaveRzaRequestToJson auf, die Körper sind also
+    // gleich. Am Server nachgemessen: ohne challengeId antwortet die
+    // Leseroute mit challenge_not_found (HTTP 400), mit einer Kennung
+    // antwortet sie auch dann, wenn man bei der Aktion nicht mitmacht.
+    Q_INVOKABLE void fetchJourneyLogs(qlonglong challengeId);
+    Q_INVOKABLE void saveCyclingDays(qlonglong challengeId, const QStringList &dates,
+                                     bool countDay);
+    Q_INVOKABLE void deleteCyclingDays(qlonglong challengeId, const QStringList &dates);
+    // "Ich bin heute geradelt": ein einzelner Tag, der häufige Fall.
     Q_INVOKABLE void addCyclingDay(qlonglong challengeId, const QDate &day);
+
+    // Das Gitter für den Fahrtenbuch-Kalender. Die Rechnerei steckt
+    // absichtlich hier und nicht in QML: das JavaScript von Qt 4.7 kann
+    // "2026-10-09" nicht lesen, und ein halb geparstes Datum fällt erst
+    // beim Eintragen auf. Jeder Eintrag hat date (yyyy-MM-dd), day,
+    // inMonth und logged.
+    Q_INVOKABLE QVariantList monthGrid(int year, int month) const;
+    Q_INVOKABLE int loggedDayCount() const { return m_journeyLogs.size(); }
+    Q_INVOKABLE bool dayIsLogged(const QString &date) const;
+
+    // Orte sammeln. GET /pois?challengeId=N liefert die Strecken einer
+    // Aktion mit ihren Orten (gemessen; ohne den Parameter gibt es eine
+    // 500 -- das war kein fehlender Wettbewerb, sondern der fehlende
+    // Parameter, siehe doc/api.md §12). Die Koordinaten kommen als
+    // GeoJSON, also [Länge, Breite] -- in dieser Reihenfolge.
+    Q_INVOKABLE void fetchPois(qlonglong challengeId);
+    // Einsammeln wie im Original: die eigene Position als entarteter
+    // Kasten an /pois/collect, und was zurückkommt, wird als gefunden
+    // gemeldet. Den Abstand entscheidet also der Dienst, nicht wir -- die
+    // Original-App hat dafür keinen eigenen Radius (nachgesehen in
+    // calculateBounds: bei einem einzigen Punkt fallen die beiden Ecken
+    // zusammen).
+    Q_INVOKABLE void collectHere(double latitude, double longitude);
+    Q_INVOKABLE void markPoiFound(qlonglong poiId);
+    // Luftlinie in Metern, damit die Orteseite nach Nähe sortieren kann.
+    Q_INVOKABLE double metresBetween(double lat1, double lon1,
+                                     double lat2, double lon2) const;
 
     // Ziele. Datum als reines yyyy-MM-dd -- mit Uhrzeit stürzt die Route
     // ab, und goalId muss bei einem neuen Ziel fehlen oder null sein (eine
@@ -160,6 +211,8 @@ signals:
     void communityChanged();
     void searchChanged();
     void timelineChanged();
+    void journeyLogsChanged();
+    void poisChanged();
     void challengesChanged();
     void newsChanged();
     void goalsChanged();
@@ -181,18 +234,21 @@ private:
                 ChallengeActionRequest, CyclingDayRequest, PersonUpdateRequest,
                 RideUpdateRequest, RideDeleteRequest, NewsRequest,
                 SponsorsRequest, NotificationsRequest, GoalsRequest,
-                GoalActionRequest };
+                GoalActionRequest, JourneyLogsRequest, JourneyLogActionRequest,
+                PoisRequest, PoiCollectRequest, PoiFoundRequest };
 
     struct Pending
     {
-        Pending() : kind(LoginRequest) {}
+        Pending() : kind(LoginRequest), remoteId(0), challengeId(0) {}
         Kind kind;
         QString rideId;
         qlonglong remoteId;
+        qlonglong challengeId;
     };
 
     int send(Kind kind, const QString &verb, const QString &path,
-             const QVariantMap &body, const QString &rideId = QString());
+             const QVariantMap &body, const QString &rideId = QString(),
+             qlonglong challengeId = 0);
     void setError(const QString &text);
     void setToken(const QString &token);
     void handleEnvelope(const Pending &pending, const QVariantMap &envelope);
@@ -215,6 +271,12 @@ private:
     QVariantList m_months;
     QVariantList m_timeline;
     QVariantList m_trophies;
+    QVariantList m_journeyLogs;
+    qlonglong m_journeyChallenge;
+    qlonglong m_poiChallenge;
+    QVariantList m_poiRoutes;
+    QVariantList m_pois;
+    QString m_poiMessage;
     QVariantList m_goals;
     QVariantList m_goalTemplates;
     QVariantList m_news;

@@ -496,3 +496,120 @@ Server im selben Atemzug setzt.
 
 `tests/coretest.cpp` prüft das Signaturverfahren gegen einen festen Sollwert:
 bricht es, bricht die Anmeldung, und zwar stillschweigend.
+
+## 12. Fahrtenbuch und Orte sammeln, 09.10.2026  `[GEMESSEN]` + `[BIN]`
+
+### 12.1 Eine Korrektur zuerst
+
+In §10 steht, `/pois` habe auf zehn Parameterformen mit **500** geantwortet, und
+das wurde dem fehlenden laufenden Wettbewerb zugeschrieben. **Das war falsch.**
+Es fehlte schlicht der Abfrageparameter `challengeId`:
+
+```
+GET /pois                 → 500  {"message":"Server Error"}
+GET /pois?challengeId=1   → 200  {"success":true,"data":{"routes":[]}}
+GET /pois?challengeId=136 → 200  16 Strecken mit insgesamt einigen hundert Orten
+```
+
+Dasselbe Muster wie bei den Zielen, wo eine 500 am Datumsformat und an
+`goalId: 0` lag und nicht an einer fehlenden Aktion: **eine 500 dieser
+Plattform ist zuerst ein Verdacht gegen den eigenen Körper, nicht gegen den
+Kalender.** Ebenso `/journeylogs`: ohne `challengeId` kommt HTTP 400
+`challenge_not_found`, mit Kennung antwortet die Route auch dann, wenn man bei
+der Aktion gar nicht mitmacht.
+
+### 12.2 Fahrtenbuch (im Binär "Rza" — Radelt zur Arbeit)
+
+Drei Routen um **einen** Körper. `DeleteRzaRequest::toJson` ruft im
+rekonstruierten Abbild wörtlich `_$SaveRzaRequestToJson` auf, die Körper sind
+also identisch.
+
+| Zweck | Methode | Pfad |
+|---|---|---|
+| lesen | GET | `/journeylogs?challengeId=<id>` |
+| eintragen | PUT | `/journeylog/save` |
+| austragen | DELETE | `/journeylog/delete` |
+
+```json
+{ "challengeId": 42, "dates": ["2026-10-09"], "countDay": true }
+```
+
+`dates` ist eine Liste (mehrere Tage auf einmal), Format `yyyy-MM-dd` — das
+Format steht im Binär bei beiden Routen wörtlich. Gemessen: `data` der
+Leseroute ist eine **blanke Liste**; `RzaResponse` kennt daneben einen
+Schlüssel `journeylogs`, deshalb nimmt der Port beide Formen. Einträge tragen
+`id, date, challengeId, countDay`.
+
+Gemessen, ohne Spuren zu hinterlassen: `save` mit `dates: []` und `delete` mit
+einem Tag, an dem nichts eingetragen war, antworten beide
+`{"success":true,"data":[]}` — die Feldnamen stimmen also, und es wurde nichts
+angelegt.
+
+Die Oberfläche des Originals ist ein Kalender
+(`rza_selection_calendar_screen.dart`), in dem man Tage antippt. Der Port macht
+das genauso; das Gitter rechnet `Api::monthGrid()` in C++, weil das JavaScript
+von Qt 4.7 kein ISO-Datum lesen kann.
+
+### 12.3 Orte sammeln
+
+| Zweck | Methode | Pfad |
+|---|---|---|
+| Orte einer Aktion | GET | `/pois?challengeId=<id>` |
+| was hier in Reichweite liegt | GET | `/pois/collect?boundary=<kasten>&found=<bool>` |
+| als gefunden melden | PUT | `/pois/markasfound` |
+
+Ein Ort, wie der Dienst ihn wirklich schickt (gemessen, Ort 49 der
+passathon-Strecke „Vorarlberg – Rheintal 20"):
+
+```json
+{
+  "id": 49,
+  "name": "Mehrfamilienhaus BT 3 Hasenfeld am Grindelkanal",
+  "description": "",
+  "image": "https://passathon.at/.../3778%20Lustenau...jpg",
+  "externalLink": "https://passivehouse-database.org/...",
+  "imageCredit": "©VOGEWOSI/Schnabel, Dornbirn/Rankweil",
+  "geometry": { "type": "Point", "coordinates": [9.65851, 47.41143] },
+  "singleAlreadyCollected": false
+}
+```
+
+**Die Koordinaten sind GeoJSON, also `[Länge, Breite]`.** Das ist der eine
+Dreher, der nirgends auffällt: vertauscht liegt dieser Ort statt in Lustenau
+bei 9,66° Nord im Golf von Guinea, und die Sortierung nach Nähe wird
+Unsinn. `tests/coretest.cpp` prüft genau diesen Ort.
+
+Die Orte hängen an Strecken: `data.routes[]` mit `id, name, description,
+geometry` (ein `MultiLineString`) und `pois[]`.
+
+**Einsammeln** macht das Original so — nachgesehen in `gps_tracking_cubit` →
+`Location.calculateBounds` → `getNotCollectedPoisForBounds`:
+`getCurrentPosition()`, daraus eine Liste mit **einem** Punkt, daraus
+`LatLngBounds` — bei einem Punkt fallen beide Ecken zusammen. Der Kasten ist
+also die eigene Position zweimal, und **welcher Abstand reicht, entscheidet
+der Dienst.** Einen Radius hat die Original-App nicht; dieser Port hat deshalb
+auch keinen. Bleibt die Antwort leer, sagt das Original „Fahre noch näher an
+den Ort und versuche es erneut".
+
+Die Ecken sind `Breite,Länge`; die Reihenfolge stammt aus den Feldabständen im
+Abbild (`field_7` = latitude vor `field_f` = longitude), und der zusammengesetzte
+String ist `[b,l],[b,l]`. Gemessen: diese Form nimmt der Dienst an (HTTP 200),
+ein unsinniger `boundary`-Wert bringt ihm eine 500 — er parst also wirklich.
+Welche Ecke zuerst steht, ließ sich ohne laufende Aktion nicht entscheiden; bei
+einem entarteten Kasten ist es ohnehin dieselbe.
+
+`PUT /pois/markasfound` nimmt `poiIds` (Liste), `familyMemberIds` (Liste, leer
+heißt „nur ich") und `datetime` im Format **`yyyy-MM-dd HH:mm:ss`** (Format
+wörtlich im Binär). Diese Route wurde **absichtlich nicht** mit einer echten
+Ortskennung ausprobiert: sie schreibt ins Konto. `PoisFoundResponse` hat ein
+Feld `pois`; der Port zeigt einen Haken erst, wenn die Liste ihn bestätigt, und
+liest die Orte danach neu — der Statuscode allein taugt nicht als Beleg.
+
+### 12.4 Was offen bleibt
+
+Am 09.10.2026 ist in diesem Konto **keine** Aktion offen oder belegt
+(`/challenges/active` → `available: []`, `signedup: []`). Darum ließ sich
+nicht messen: ob `/pois/collect` die Orte einer Aktion ausgibt, bei der man
+mitmacht, wie die Antwort von `markasfound` im Erfolgsfall aussieht, und was
+ein Fahrtenbuch mit Einträgen zurückgibt. Alles dazu steht im Port so, wie es
+im Binär steht, und ist dort als ungeprüft vermerkt.

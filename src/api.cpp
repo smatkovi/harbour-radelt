@@ -1,6 +1,7 @@
 #include "api.h"
 
 #include "http.h"
+#include "geojson.h"
 #include "json.h"
 #include "ridestore.h"
 #include "settings.h"
@@ -54,9 +55,11 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
 #else
     m_http(new ProcessHttp(this)),
 #endif
+    m_journeyChallenge(0),
+    m_poiChallenge(0),
+    m_searching(false),
     m_nextTag(1),
-    m_open(0),
-    m_searching(false)
+    m_open(0)
 {
     connect(m_http, SIGNAL(finished(int,int,QByteArray,QString)),
             this, SLOT(replyFinished(int,int,QByteArray,QString)));
@@ -94,7 +97,8 @@ void Api::setToken(const QString &token)
 }
 
 int Api::send(Kind kind, const QString &verb, const QString &path,
-              const QVariantMap &body, const QString &rideId)
+              const QVariantMap &body, const QString &rideId,
+              qlonglong challengeId)
 {
     QStringList headers;
     if (!m_token.isEmpty()) {
@@ -108,6 +112,7 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
     pending.kind = kind;
     pending.rideId = rideId;
     pending.remoteId = 0;
+    pending.challengeId = challengeId;
 
     const int tag = m_nextTag++;
     m_pending.insert(tag, pending);
@@ -179,6 +184,12 @@ void Api::logout()
     m_notifications.clear();
     m_openChallenges.clear();
     m_myChallenges.clear();
+    m_journeyLogs.clear();
+    m_journeyChallenge = 0;
+    m_poiChallenge = 0;
+    m_poiRoutes.clear();
+    m_pois.clear();
+    m_poiMessage.clear();
     m_settings->setToken(QString());
     emit personChanged();
     emit dashboardChanged();
@@ -186,6 +197,8 @@ void Api::logout()
     emit communityChanged();
     emit timelineChanged();
     emit challengesChanged();
+    emit journeyLogsChanged();
+    emit poisChanged();
 }
 
 void Api::resume()
@@ -284,18 +297,166 @@ void Api::leaveChallenge(qlonglong challengeId)
 
 void Api::addCyclingDay(qlonglong challengeId, const QDate &day)
 {
+    QStringList tage;
+    tage << (day.isValid() ? day : QDate::currentDate()).toString("yyyy-MM-dd");
+    saveCyclingDays(challengeId, tage, true);
+}
+
+// --- Fahrtenbuch -----------------------------------------------------------
+//
+// Im Original heisst das "Radelt zur Arbeit": ein Kalender, in dem man die
+// Tage antippt, an denen man geradelt ist. Alle drei Routen nehmen
+// denselben Koerper; DeleteRzaRequest::toJson ruft im rekonstruierten
+// Abbild woertlich _$SaveRzaRequestToJson auf.
+
+void Api::fetchJourneyLogs(qlonglong challengeId)
+{
     if (!loggedIn() || challengeId <= 0)
         return;
-    // SaveRzaRequest: challengeId, dates, countDay. "dates" ist eine Liste,
-    // damit sich mehrere Tage auf einmal nachtragen lassen.
+    // Ohne den Parameter antwortet die Route mit challenge_not_found --
+    // das ist am Server nachgemessen und hat nichts damit zu tun, ob
+    // gerade eine Aktion laeuft.
+    send(JourneyLogsRequest, "GET",
+         "/journeylogs?challengeId=" + QString::number(challengeId),
+         QVariantMap(), QString(), challengeId);
+}
+
+void Api::saveCyclingDays(qlonglong challengeId, const QStringList &dates,
+                          bool countDay)
+{
+    if (!loggedIn() || challengeId <= 0 || dates.isEmpty())
+        return;
     QVariantMap body;
     body.insert("challengeId", challengeId);
-    QVariantList tage;
-    tage << (day.isValid() ? day : QDate::currentDate()).toString("yyyy-MM-dd");
-    body.insert("dates", tage);
-    body.insert("countDay", true);
-    send(CyclingDayRequest, "PUT", "/journeylog/save", body);
+    QVariantList liste;
+    for (int i = 0; i < dates.size(); ++i)
+        liste << dates.at(i);
+    body.insert("dates", liste);
+    body.insert("countDay", countDay);
+    send(JourneyLogActionRequest, "PUT", "/journeylog/save", body,
+         QString(), challengeId);
 }
+
+void Api::deleteCyclingDays(qlonglong challengeId, const QStringList &dates)
+{
+    if (!loggedIn() || challengeId <= 0 || dates.isEmpty())
+        return;
+    QVariantMap body;
+    body.insert("challengeId", challengeId);
+    QVariantList liste;
+    for (int i = 0; i < dates.size(); ++i)
+        liste << dates.at(i);
+    body.insert("dates", liste);
+    body.insert("countDay", true);
+    send(JourneyLogActionRequest, "DELETE", "/journeylog/delete", body,
+         QString(), challengeId);
+}
+
+bool Api::dayIsLogged(const QString &date) const
+{
+    for (int i = 0; i < m_journeyLogs.size(); ++i) {
+        const QVariantMap eintrag = m_journeyLogs.at(i).toMap();
+        if (eintrag.value("date").toString().left(10) == date)
+            return true;
+    }
+    return false;
+}
+
+QVariantList Api::monthGrid(int year, int month) const
+{
+    QVariantList gitter;
+    if (month < 1 || month > 12 || year < 1900)
+        return gitter;
+
+    const QDate erster(year, month, 1);
+    if (!erster.isValid())
+        return gitter;
+
+    // Montag zuerst, wie der Kalender der Plattform. dayOfWeek() gibt 1
+    // fuer Montag, also sind davor dayOfWeek()-1 Felder leer.
+    const QDate anfang = erster.addDays(-(erster.dayOfWeek() - 1));
+    const QDate letzter = erster.addMonths(1).addDays(-1);
+    QDate ende = letzter.addDays(7 - letzter.dayOfWeek());
+
+    const QDate heute = QDate::currentDate();
+    for (QDate tag = anfang; tag <= ende; tag = tag.addDays(1)) {
+        QVariantMap feld;
+        const QString datum = tag.toString("yyyy-MM-dd");
+        feld.insert("date", datum);
+        feld.insert("day", tag.day());
+        feld.insert("inMonth", tag.month() == month && tag.year() == year);
+        feld.insert("logged", dayIsLogged(datum));
+        feld.insert("today", tag == heute);
+        feld.insert("future", tag > heute);
+        gitter << feld;
+    }
+    return gitter;
+}
+
+// --- Orte sammeln ----------------------------------------------------------
+
+void Api::fetchPois(qlonglong challengeId)
+{
+    if (!loggedIn() || challengeId <= 0)
+        return;
+    m_poiChallenge = challengeId;
+    send(PoisRequest, "GET", "/pois?challengeId=" + QString::number(challengeId),
+         QVariantMap(), QString(), challengeId);
+}
+
+void Api::collectHere(double latitude, double longitude)
+{
+    if (!loggedIn())
+        return;
+    // So macht es die Original-App: die eigene Position wird zu einem
+    // Kasten, dessen beide Ecken zusammenfallen (calculateBounds ueber
+    // eine Liste mit genau einem Punkt), und der Dienst entscheidet, was
+    // nah genug ist. Deshalb steht hier kein Radius -- im Original steht
+    // auch keiner.
+    //
+    // Der Kasten ist Breite,Laenge je Ecke -- die Reihenfolge stammt aus
+    // den Feldabstaenden im Abbild (field_7 = latitude vor field_f =
+    // longitude). Ein unsinniger Wert bringt den Dienst zu einer 500,
+    // dieser hier wird angenommen; mehr ist ohne laufende Aktion nicht zu
+    // messen.
+    const QString ecke = QString::number(latitude, 'f', 6) + ","
+                       + QString::number(longitude, 'f', 6);
+    const QString kasten = "[" + ecke + "],[" + ecke + "]";
+    send(PoiCollectRequest, "GET",
+         "/pois/collect?found=false&boundary=" + QString::fromLatin1(
+             QUrl::toPercentEncoding(kasten, "[],")),
+         QVariantMap());
+}
+
+void Api::markPoiFound(qlonglong poiId)
+{
+    if (!loggedIn() || poiId <= 0)
+        return;
+    QVariantList ids;
+    ids << poiId;
+    QVariantMap body;
+    body.insert("poiIds", ids);
+    // familyMemberIds gehoert zum Familienmodus der Original-App; leer
+    // heisst "nur ich". Ungeprueft, weil ohne laufende Aktion kein Ort
+    // einzusammeln ist.
+    body.insert("familyMemberIds", QVariantList());
+    body.insert("datetime", QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+    send(PoiFoundRequest, "PUT", "/pois/markasfound", body);
+}
+
+double Api::metresBetween(double lat1, double lon1,
+                          double lat2, double lon2) const
+{
+    TrackPoint a;
+    a.latitude = lat1;
+    a.longitude = lon1;
+    TrackPoint b;
+    b.latitude = lat2;
+    b.longitude = lon2;
+    return Track::distanceBetween(a, b);
+}
+
+
 
 void Api::fetchGoals()
 {
@@ -745,6 +906,96 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
     }
     case GoalActionRequest:
         fetchGoals();
+        break;
+    case JourneyLogsRequest:
+        // Gemessen: data ist hier eine blanke Liste. Das Abbild kennt
+        // daneben einen Schluessel journeylogs (RzaResponse), also werden
+        // beide Formen genommen.
+        m_journeyLogs = data.toList();
+        if (m_journeyLogs.isEmpty())
+            m_journeyLogs = map.value("journeylogs").toList();
+        m_journeyChallenge = pending.challengeId;
+        emit journeyLogsChanged();
+        break;
+    case JourneyLogActionRequest:
+        // Der Dienst antwortet auf Eintragen und Loeschen mit einer leeren
+        // Liste, nicht mit dem neuen Stand. Also neu lesen, statt den
+        // Kalender mitzurechnen und zu hoffen.
+        fetchJourneyLogs(pending.challengeId);
+        send(DashboardRequest, "GET", "/dashboard", QVariantMap());
+        break;
+    case PoisRequest: {
+        m_poiRoutes.clear();
+        m_pois.clear();
+        const QVariantList strecken = map.value("routes").toList();
+        for (int i = 0; i < strecken.size(); ++i) {
+            const QVariantMap strecke = strecken.at(i).toMap();
+            const QString name = strecke.value("name").toString();
+            const QVariantList rohe = strecke.value("pois").toList();
+            QVariantList orte;
+            for (int k = 0; k < rohe.size(); ++k) {
+                const QVariantMap ort = Geo::ortFlach(rohe.at(k).toMap(), name);
+                orte << ort;
+                m_pois << ort;
+            }
+            QVariantMap eintrag;
+            eintrag.insert("id", strecke.value("id"));
+            eintrag.insert("name", name);
+            eintrag.insert("description", strecke.value("description"));
+            eintrag.insert("pois", orte);
+            eintrag.insert("count", orte.size());
+            m_poiRoutes << eintrag;
+        }
+        // Orte, die nicht an einer Strecke haengen.
+        const QVariantList einzeln = map.value("pois").toList();
+        for (int i = 0; i < einzeln.size(); ++i)
+            m_pois << Geo::ortFlach(einzeln.at(i).toMap(), QString());
+        m_poiMessage.clear();
+        emit poisChanged();
+        break;
+    }
+    case PoiCollectRequest: {
+        // Was der Dienst zu der gemeldeten Position hergibt, darf
+        // eingesammelt werden. Ist die Liste leer, war nichts in
+        // Reichweite -- das Original sagt dort "Fahre noch naeher an den
+        // Ort und versuche es erneut".
+        const QVariantList gefunden = map.value("pois").toList();
+        if (gefunden.isEmpty()) {
+            m_poiMessage = tr("Kein Ort in Reichweite");
+            emit poisChanged();
+            break;
+        }
+        QStringList namen;
+        for (int i = 0; i < gefunden.size(); ++i) {
+            const QVariantMap ort = gefunden.at(i).toMap();
+            const qlonglong id = ort.value("id").toLongLong();
+            if (id <= 0)
+                continue;
+            namen << ort.value("name").toString();
+            markPoiFound(id);
+        }
+        m_poiMessage = namen.isEmpty() ? tr("Kein Ort in Reichweite")
+                                       : namen.join(", ");
+        emit poisChanged();
+        break;
+    }
+    case PoiFoundRequest:
+        // Auf diese Route hat der Dienst bei einer unsinnigen Anfrage mit
+        // HTTP 200 und einem voellig leeren Koerper geantwortet -- dann
+        // landet die Antwort gar nicht hier. Kommt eine Huelle an, nehmen
+        // wir sie: PoisFoundResponse hat ein Feld pois.
+        {
+            const QVariantList bestaetigt = map.value("pois").toList();
+            if (!bestaetigt.isEmpty()) {
+                m_poiMessage = tr("%1 Ort(e) eingesammelt").arg(bestaetigt.size());
+                emit poisChanged();
+            }
+            // Ob der Ort wirklich steht, sagt uns nur die Liste selbst:
+            // deshalb neu lesen und nicht den Haken aus dem Statuscode
+            // malen.
+            if (m_poiChallenge > 0)
+                fetchPois(m_poiChallenge);
+        }
         break;
     case PersonUpdateRequest:
         m_person = map.contains("person") ? map.value("person").toMap() : map;

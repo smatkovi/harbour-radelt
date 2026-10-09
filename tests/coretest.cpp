@@ -18,6 +18,7 @@
 
 #include <QCryptographicHash>
 
+#include "geojson.h"
 #include "json.h"
 #include "track.h"
 
@@ -183,6 +184,51 @@ static void testLoginSignature()
           "Signatur trifft den Sollwert -- sonst lehnt der Server jede Anmeldung ab");
 }
 
+// Der eine Dreher, der jeden Ort stillschweigend ins Meer setzen wuerde:
+// GeoJSON schreibt [Laenge, Breite]. Die Zahlen hier sind eine echte
+// Antwort des Dienstes (Ort 49 der passathon-Strecke "Vorarlberg -
+// Rheintal 20", gemessen am 09.10.2026) -- 47,4 Grad Nord und 9,66 Grad
+// Ost liegt in Lustenau. Vertauscht laege der Ort bei 9,66 Grad Nord im
+// Golf von Guinea.
+static void testGeoJson()
+{
+    const QVariant antwort = Json::parse(
+        "{\"id\":49,\"name\":\"Mehrfamilienhaus BT 3\","
+        "\"description\":\"\",\"image\":\"https://example.invalid/b.jpg\","
+        "\"geometry\":{\"type\":\"Point\",\"coordinates\":[9.65851,47.41143]},"
+        "\"singleAlreadyCollected\":false}");
+    const QVariantMap ort = Geo::ortFlach(antwort.toMap(), "Rheintal 20");
+
+    checkNear(ort.value("latitude").toDouble(), 47.41143, 1e-6,
+              "Breite kommt aus der zweiten Koordinate");
+    checkNear(ort.value("longitude").toDouble(), 9.65851, 1e-6,
+              "Laenge kommt aus der ersten Koordinate");
+    check(ort.value("hasPosition").toBool(), "Ort hat eine Position");
+    check(!ort.value("collected").toBool(), "noch nicht eingesammelt");
+    check(ort.value("routeName").toString() == "Rheintal 20", "Streckenname dabei");
+    check(ort.value("id").toLongLong() == 49, "Kennung bleibt");
+    check(!ort.contains("geometry"), "die Huelle ist weg");
+
+    // Breite und Laenge duerfen nicht verwechselbar nah beieinander
+    // liegen: ein Ort, der in Oesterreich liegt, hat immer eine Breite
+    // ueber 46 und eine Laenge unter 18.
+    check(ort.value("latitude").toDouble() > 46.0
+          && ort.value("longitude").toDouble() < 18.0,
+          "der Ort liegt in Oesterreich, nicht im Meer");
+
+    // Ein eingesammelter Ort: der Dienst setzt collectedAt.
+    const QVariant zweite = Json::parse(
+        "{\"id\":7,\"collectedAt\":\"2026-07-01 10:00:00\","
+        "\"geometry\":{\"type\":\"Point\",\"coordinates\":[16.37,48.21]}}");
+    const QVariantMap alt = Geo::ortFlach(zweite.toMap(), QString());
+    check(alt.value("collected").toBool(), "collectedAt gilt als eingesammelt");
+
+    // Ein Ort ohne Geometrie darf nicht auf 0,0 landen und dort als
+    // naechster Ort ganz oben stehen.
+    const QVariantMap ohne = Geo::ortFlach(Json::parse("{\"id\":8}").toMap(), QString());
+    check(!ohne.value("hasPosition").toBool(), "Ort ohne Geometrie ist erkennbar");
+}
+
 static void testGpx()
 {
     Track track;
@@ -214,6 +260,7 @@ int main(int argc, char *argv[])
     testDistance();
     testTrack();
     testGpx();
+    testGeoJson();
     testLoginSignature();
 
     out << (failures ? QString("%1 Fehler\n").arg(failures)

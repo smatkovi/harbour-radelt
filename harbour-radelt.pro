@@ -21,6 +21,7 @@ SOURCES += \
 HEADERS += \
     src/api.h \
     src/farben.h \
+    src/geojson.h \
     src/format.h \
     src/http.h \
     src/json.h \
@@ -55,6 +56,9 @@ DISTFILES += \
     qml/pages/NewsPage.qml \
     qml/pages/GoalsPage.qml \
     qml/pages/GoalDialog.qml \
+    qml/pages/FahrtenbuchPage.qml \
+    qml/pages/OrtePage.qml \
+    qml/pages/OrtPage.qml \
     qml/components/BigNumber.qml \
     qml/components/ThemedPage.qml \
 

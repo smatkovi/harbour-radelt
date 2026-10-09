@@ -86,12 +86,20 @@ Page {
                             width: (160 * 0 + parent.width - 22) / 12
                             height: parent.height
 
-                            property real hoechst: {
+                            // Kein Anweisungsblock als Bindung: das
+                            // QML von Qt 4.7 nimmt das nicht an (der
+                            // Pruefer meldet "Syntax error"). Die
+                            // Funktion bekommt die Monate als Argument,
+                            // damit die Bindung sie als Abhaengigkeit
+                            // sieht und nachrechnet.
+                            function hoechstWert(monate) {
                                 var m = 1
-                                for (var i = 0; i < Api.months.length; i++)
-                                    m = Math.max(m, Api.months[i].km_total || 0)
+                                for (var i = 0; i < monate.length; i++)
+                                    m = Math.max(m, monate[i].km_total || 0)
                                 return m
                             }
+
+                            property real hoechst: hoechstWert(Api.months)
 
                             Rectangle {
                                 anchors.bottom: beschriftung.top

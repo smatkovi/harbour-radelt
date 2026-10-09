@@ -1,8 +1,9 @@
 import QtQuick 1.1
 import com.nokia.meego 1.0
 
-// Aktionen ("Kampagnen"). Ohne Teilnahme bleiben Ziele, Fahrtenbuch und
-// Radeltage leer -- der Dienst antwortet dort sonst challenge_not_found.
+// Aktionen ("Kampagnen"). Fahrtenbuch, Radeltage und die Orte zum Sammeln
+// haengen an einer Aktion -- ohne Aktionskennung antwortet der Dienst dort
+// challenge_not_found. Ziele gehen auch ohne Aktion.
 Page {
     id: page
     tools: tools

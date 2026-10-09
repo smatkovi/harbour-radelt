@@ -2,9 +2,9 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import "../components"
 
-// Aktionen ("Kampagnen"). Das ist der Schlüssel zum Rest: ohne Teilnahme
-// an einer laufenden Aktion bleiben Ziele, Fahrtenbuch und Radeltage leer
-// — der Dienst antwortet dort sonst mit challenge_not_found.
+// Aktionen ("Kampagnen"). Fahrtenbuch, Radeltage und die Orte zum Sammeln
+// hängen an einer Aktion — ohne Aktionskennung antwortet der Dienst dort
+// mit challenge_not_found. Ziele gehen auch ohne Aktion.
 ThemedPage {
     id: page
 
@@ -86,8 +86,8 @@ ThemedPage {
                 color: palette.secondaryColor
                 visible: Api.myChallenges.length === 0
                 text: Api.loggedIn
-                      ? qsTr("Du machst bei keiner Aktion mit. Erst damit zählen Ziele, "
-                             + "Radeltage und das Fahrtenbuch.")
+                      ? qsTr("Du machst bei keiner Aktion mit. Erst damit gibt es "
+                             + "Radeltage, ein Fahrtenbuch und Orte zum Sammeln.")
                       : qsTr("Nicht angemeldet")
             }
 
