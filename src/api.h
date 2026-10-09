@@ -1,6 +1,7 @@
 #ifndef API_H
 #define API_H
 
+#include <QDate>
 #include <QHash>
 #include <QObject>
 #include <QStringList>
@@ -37,6 +38,9 @@ class Api : public QObject
     Q_PROPERTY(QVariantList foundPeople READ foundPeople NOTIFY searchChanged)
     Q_PROPERTY(bool searching READ searching NOTIFY searchChanged)
     Q_PROPERTY(QVariantMap dashboard READ dashboard NOTIFY dashboardChanged)
+    // Aktionen: was man mitmachen kann und was man schon mitmacht.
+    Q_PROPERTY(QVariantList openChallenges READ openChallenges NOTIFY challengesChanged)
+    Q_PROPERTY(QVariantList myChallenges READ myChallenges NOTIFY challengesChanged)
     // Die Jahreszahlen der Übersicht, flach und schon umgerechnet.
     Q_PROPERTY(QVariantMap yearStats READ yearStats NOTIFY dashboardChanged)
     Q_PROPERTY(QVariantList months READ months NOTIFY dashboardChanged)
@@ -62,6 +66,8 @@ public:
     QVariantList months() const { return m_months; }
     QVariantList timeline() const { return m_timeline; }
     QVariantList trophies() const { return m_trophies; }
+    QVariantList openChallenges() const { return m_openChallenges; }
+    QVariantList myChallenges() const { return m_myChallenges; }
 
 public slots:
     void login(const QString &user, const QString &password);
@@ -87,6 +93,17 @@ public slots:
     // Verlauf und Trophäen für die Verlaufsseite.
     void fetchTimeline();
 
+    // Aktionen ("Kampagnen"). Ohne Teilnahme an einer laufenden Aktion
+    // bleiben Ziele, Fahrtenbuch und Radeltage leer -- der Dienst
+    // antwortet dort sonst mit challenge_not_found.
+    Q_INVOKABLE void fetchChallenges();
+    Q_INVOKABLE void joinChallenge(qlonglong challengeId);
+    Q_INVOKABLE void leaveChallenge(qlonglong challengeId);
+
+    // "Ich bin heute geradelt": Radeltage zu einer Aktion eintragen.
+    // Im Binär heißt das SaveRzaRequest (Radelt zur Arbeit).
+    Q_INVOKABLE void addCyclingDay(qlonglong challengeId, const QDate &day);
+
     // Freund:innen. Die Suche braucht mindestens drei Buchstaben -- so
     // hält es die Original-App, und der Server findet mit weniger ohnehin
     // zu viel. Die Aktionen nehmen alle die Kennung der anderen Person
@@ -106,6 +123,7 @@ signals:
     void communityChanged();
     void searchChanged();
     void timelineChanged();
+    void challengesChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
     // The server says this app is too old for it; the pages show a hint.
@@ -120,7 +138,8 @@ private:
                 RideSaveRequest, TrackSaveRequest, BikeSaveRequest,
                 BikeDeleteRequest, FriendsRequest, OrganisationsRequest,
                 ShareUrlRequest, TimelineRequest, TrophiesRequest,
-                SearchRequest, FriendActionRequest };
+                SearchRequest, FriendActionRequest, ChallengesRequest,
+                ChallengeActionRequest, CyclingDayRequest };
 
     struct Pending
     {
@@ -136,6 +155,7 @@ private:
     void setToken(const QString &token);
     void handleEnvelope(const Pending &pending, const QVariantMap &envelope);
     void sendTrack(const QString &rideId, qlonglong remoteId);
+    qlonglong bikeIdFor(const QString &name) const;
 
     Settings *m_settings;
     RideStore *m_rides;
@@ -153,6 +173,8 @@ private:
     QVariantList m_months;
     QVariantList m_timeline;
     QVariantList m_trophies;
+    QVariantList m_openChallenges;
+    QVariantList m_myChallenges;
     QVariantList m_found;
     bool m_searching;
     QString m_token;

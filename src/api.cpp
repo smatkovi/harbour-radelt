@@ -158,12 +158,15 @@ void Api::logout()
     m_months.clear();
     m_timeline.clear();
     m_trophies.clear();
+    m_openChallenges.clear();
+    m_myChallenges.clear();
     m_settings->setToken(QString());
     emit personChanged();
     emit dashboardChanged();
     emit bikesChanged();
     emit communityChanged();
     emit timelineChanged();
+    emit challengesChanged();
 }
 
 void Api::resume()
@@ -225,6 +228,54 @@ void Api::fetchTimeline()
         return;
     send(TimelineRequest, "GET", "/timelineevents", QVariantMap());
     send(TrophiesRequest, "GET", "/trophies", QVariantMap());
+}
+
+void Api::fetchChallenges()
+{
+    if (!loggedIn())
+        return;
+    send(ChallengesRequest, "GET", "/challenges/active", QVariantMap());
+}
+
+void Api::joinChallenge(qlonglong challengeId)
+{
+    if (!loggedIn() || challengeId <= 0)
+        return;
+    // CampaignSignupRequest aus dem Binär: challengeId, organisationIds,
+    // journeyBikeId, journeyDistance. Die Organisationen übernimmt der
+    // Dienst aus dem Profil, wenn wir keine nennen; das Rad ist das
+    // Hauptrad.
+    QVariantMap body;
+    body.insert("challengeId", challengeId);
+    body.insert("organisationIds", QVariantList());
+    const qlonglong rad = bikeIdFor(QString());
+    if (rad > 0)
+        body.insert("journeyBikeId", rad);
+    send(ChallengeActionRequest, "PUT", "/challenges/signup", body);
+}
+
+void Api::leaveChallenge(qlonglong challengeId)
+{
+    if (!loggedIn() || challengeId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("challengeId", challengeId);
+    send(ChallengeActionRequest, "POST", "/challenges/signoff", body);
+}
+
+void Api::addCyclingDay(qlonglong challengeId, const QDate &day)
+{
+    if (!loggedIn() || challengeId <= 0)
+        return;
+    // SaveRzaRequest: challengeId, dates, countDay. "dates" ist eine Liste,
+    // damit sich mehrere Tage auf einmal nachtragen lassen.
+    QVariantMap body;
+    body.insert("challengeId", challengeId);
+    QVariantList tage;
+    tage << (day.isValid() ? day : QDate::currentDate()).toString("yyyy-MM-dd");
+    body.insert("dates", tage);
+    body.insert("countDay", true);
+    send(CyclingDayRequest, "PUT", "/journeylog/save", body);
 }
 
 void Api::searchFriends(const QString &text)
@@ -297,27 +348,58 @@ void Api::uploadRide(const QString &rideId)
         return;
     }
 
+    // Ohne Rad nimmt der Dienst gar nichts an: bikeId ist das einzige
+    // Pflichtfeld und wird vor jeder anderen Pruefung aufgeloest -- fehlt
+    // es, stuerzt die Route ab (HTTP 500), statt es zu sagen.
+    const qlonglong bikeId = bikeIdFor(ride.value("bike").toString());
+    if (bikeId <= 0) {
+        emit rideUploaded(rideId, false,
+                          tr("No bike known yet — open the bikes page once"));
+        return;
+    }
+
+    // Die Felder sind die von CreateTrackingRequest aus dem Binaer der
+    // Original-App (doc/api.md §11).
     QVariantMap body;
-    // The field names are the ones the app's own binary carries. distance
-    // in metres and duration in seconds follow the units the platform
-    // aggregates into its km_* statistics.
-    body.insert("distance", ride.value("distance").toDouble());
-    const int duration = ride.value("movingSeconds").toInt() > 0
-                         ? ride.value("movingSeconds").toInt()
-                         : ride.value("totalSeconds").toInt();
-    body.insert("duration", duration);
-    body.insert("manual", ride.value("manual").toBool());
-    body.insert("date", stamp(ride.value("start").toDateTime()));
-    // A stable identifier of our own: the server deduplicates on it, so a
-    // ride sent twice after a dropped connection does not count twice.
-    body.insert("externalId", "harbour-radelt:" + rideId);
-    if (!ride.value("note").toString().isEmpty())
-        body.insert("comment", ride.value("note").toString());
-    const int bike = m_bikeNames.indexOf(ride.value("bike").toString());
-    if (bike >= 0 && bike < m_bikeIds.size())
-        body.insert("bikeId", m_bikeIds.at(bike));
+    body.insert("bikeId", bikeId);
+    const QDateTime start = ride.value("start").toDateTime().toLocalTime();
+    body.insert("date", start.toString("yyyy-MM-dd"));
+    // Ein unlesbares Datum weist der Dienst **nicht** zurueck, er legt die
+    // Fahrt im Jahr -000001 ab. Das Format muss also hier stimmen.
+    body.insert("description", ride.value("title").toString().isEmpty()
+                               ? ride.value("note").toString()
+                               : ride.value("title").toString());
+    body.insert("altitude", qRound(ride.value("ascent").toDouble()));
+    // **Kilometer, nicht Meter**: die Spalte dahinter heisst km_cache, und
+    // die Statistik zaehlt in km. In Metern waere jede Fahrt tausendfach
+    // zu lang.
+    body.insert("distance", ride.value("distance").toDouble() / 1000.0);
+    const int bewegt = ride.value("movingSeconds").toInt();
+    const int gesamt = ride.value("totalSeconds").toInt();
+    if (gesamt > 0) {
+        body.insert("timeStart", stamp(start));
+        body.insert("timeEnd", stamp(start.addSecs(gesamt)));
+        // Die Pause ist, was zwischen Start und Ende nicht gefahren wurde.
+        body.insert("pauseTime", qMax(0, gesamt - bewegt));
+    }
 
     send(RideSaveRequest, "POST", "/ride/save", body, rideId);
+}
+
+qlonglong Api::bikeIdFor(const QString &name) const
+{
+    // Das benannte Rad, sonst das Hauptrad, sonst das erste bekannte.
+    for (int i = 0; i < m_bikes.size(); ++i) {
+        const QVariantMap bike = m_bikes.at(i).toMap();
+        if (!name.isEmpty() && bike.value("name").toString() == name)
+            return bike.value("id").toLongLong();
+    }
+    for (int i = 0; i < m_bikes.size(); ++i) {
+        const QVariantMap bike = m_bikes.at(i).toMap();
+        if (bike.value("isMain").toBool())
+            return bike.value("id").toLongLong();
+    }
+    return m_bikes.isEmpty() ? 0 : m_bikes.first().toMap().value("id").toLongLong();
 }
 
 void Api::uploadPending()
@@ -347,22 +429,19 @@ void Api::sendTrack(const QString &rideId, qlonglong remoteId)
     for (int i = 0; i < recorded.size(); ++i) {
         const TrackPoint &point = recorded.at(i);
         QVariantMap entry;
+        // TrackData aus dem Binaer: genau diese fuenf Felder, keine
+        // Genauigkeit -- die interessiert den Dienst nicht.
         entry.insert("latitude", point.latitude);
         entry.insert("longitude", point.longitude);
-        if (point.hasAltitude())
-            entry.insert("altitude", point.altitude);
-        if (point.hasAccuracy())
-            entry.insert("accuracy", point.accuracy);
-        if (point.speed >= 0)
-            entry.insert("speed", point.speed);
+        entry.insert("speed", point.speed >= 0 ? point.speed : 0.0);
+        entry.insert("altitude", point.hasAltitude() ? point.altitude : 0.0);
         entry.insert("timestamp", stamp(point.time));
         points.append(entry);
     }
 
     QVariantMap body;
     body.insert("rideId", remoteId);
-    body.insert("externalId", "harbour-radelt:" + rideId);
-    body.insert("points", points);
+    body.insert("trackData", points);
 
     send(TrackSaveRequest, "PUT", "/ride/track/save", body, rideId);
 }
@@ -515,6 +594,22 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (m_organisations.isEmpty())
             m_organisations = data.toList();
         emit communityChanged();
+        break;
+    case ChallengesRequest: {
+        // Die Antwort trennt, was offen steht, von dem, wo man dabei ist.
+        const QVariantMap ch = map.value("challenges").toMap();
+        m_openChallenges = ch.value("available").toList();
+        m_myChallenges = ch.value("signedup").toList();
+        emit challengesChanged();
+        break;
+    }
+    case ChallengeActionRequest:
+    case CyclingDayRequest:
+        // Der Dienst ist die Wahrheit; neu lesen statt mitrechnen. Das
+        // gilt hier besonders: eine 500 heißt bei manchen Routen
+        // trotzdem "getan".
+        fetchChallenges();
+        send(DashboardRequest, "GET", "/dashboard", QVariantMap());
         break;
     case SearchRequest:
         // Die Suche liefert people[] mit kleingeschriebenen Feldern

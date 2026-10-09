@@ -50,6 +50,7 @@ DISTFILES += \
     qml/pages/BikesPage.qml \
     qml/pages/BikeDialog.qml \
     qml/pages/FindFriendsPage.qml \
+    qml/pages/ChallengesPage.qml \
     qml/components/BigNumber.qml \
     qml/components/ThemedPage.qml \
 

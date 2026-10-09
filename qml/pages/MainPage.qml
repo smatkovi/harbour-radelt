@@ -54,6 +54,10 @@ ThemedPage {
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
             }
             MenuItem {
+                text: qsTr("Aktionen")
+                onClicked: pageStack.push(Qt.resolvedUrl("ChallengesPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Übersicht")
                 onClicked: pageStack.push(Qt.resolvedUrl("OverviewPage.qml"))
             }
