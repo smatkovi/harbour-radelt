@@ -18,6 +18,18 @@ gemessen und was erschlossen ist, steht in [doc/api.md](doc/api.md).
 * Fahrt von Hand eintragen (Tag und Kilometer).
 * Anmelden am radelt.at-Konto, Fahrten einzeln oder im Stapel übertragen;
   was nicht durchkam, bleibt als „nicht übertragen" stehen.
+* Fahrten am Server ändern und löschen, Übersicht und Verlauf mit Trophäen.
+* Community: Freund:innen suchen, anfragen, annehmen; Organisationen.
+* Meine Räder, Profil mit Sichtbarkeit, Neuigkeiten.
+* Aktionen („Kampagnen") mitmachen und verlassen, Ziele anlegen und
+  verfolgen.
+* **Fahrtenbuch**: ein Kalender je Aktion mit den Tagen, an denen du
+  geradelt bist — antippen trägt ein, nochmal antippen trägt aus.
+* **Orte sammeln**: die Orte der Strecken einer Aktion, nach Nähe
+  sortiert; „Hier einsammeln" meldet die eigene Position. Welcher Abstand
+  reicht, entscheidet die Plattform — die Original-App hat dafür keinen
+  eigenen Radius, diese also auch nicht.
+* Roter Stil wie bei Fahrplan AT, dazu ein eigenes Ambiente für Sailfish.
 * Startsymbol in der jeweiligen Squircle-Silhouette des Systems.
 
 ## Aufbau

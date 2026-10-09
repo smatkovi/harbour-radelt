@@ -47,8 +47,25 @@ Page {
         return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km"
     }
 
-    // Unter Qt 4.7 ist eine Eigenschaft aus einer Funktion nicht
-    // nachvollziehbar; die Liste wird deshalb einmal gebaut und gemerkt.
+    property real sortBreite: 0
+    property real sortLaenge: 0
+    property bool sortiert: false
+
+    // Nicht bei jedem Fix neu bauen: ein Fix pro Sekunde hiesse, dass die
+    // Liste jede Sekunde neu entsteht und der Finger ins Leere tippt. Ein
+    // Fahrrad macht in 50 m keine neue Rangfolge.
+    function vielleichtNeuOrdnen() {
+        if (!Recorder.positionValid)
+            return
+        if (!sortiert) {
+            neuOrdnen()
+            return
+        }
+        if (Api.metresBetween(sortBreite, sortLaenge,
+                              Recorder.latitude, Recorder.longitude) > 50)
+            neuOrdnen()
+    }
+
     function neuOrdnen() {
         var alle = Api.pois
         var neu = []
@@ -57,8 +74,12 @@ Page {
                 continue
             neu.push(alle[i])
         }
-        if (Recorder.positionValid)
+        if (Recorder.positionValid) {
             neu.sort(function(a, b) { return entfernung(a) - entfernung(b) })
+            sortBreite = Recorder.latitude
+            sortLaenge = Recorder.longitude
+            sortiert = true
+        }
         liste = neu
     }
 
@@ -79,9 +100,11 @@ Page {
                 appWindow.showMessage(Api.poiMessage)
         }
     }
-    Connections {
-        target: Recorder
-        onPositionChanged: page.neuOrdnen()
+    Timer {
+        interval: 10000
+        repeat: true
+        running: true
+        onTriggered: page.vielleichtNeuOrdnen()
     }
 
     Header {

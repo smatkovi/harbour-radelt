@@ -20,21 +20,48 @@ ThemedPage {
             Api.fetchPois(page.aktion.id)
     }
 
+    // Die fertige Reihenfolge. Sie wird **nicht** bei jedem Fix neu
+    // gebaut: ein Fix pro Sekunde hieße, dass die Liste jede Sekunde neu
+    // entsteht, jeder Eintrag neu gezeichnet wird und der Finger ins
+    // Leere tippt. Neu geordnet wird, wenn die Orte wechseln oder man
+    // sich wirklich bewegt hat.
+    property var reihenfolge: []
+    property real sortBreite: 0
+    property real sortLaenge: 0
+    property bool sortiert: false
+
     // Nach Nähe sortieren, sobald der Empfänger etwas weiß. Ohne Position
     // bleibt die Reihenfolge, die der Dienst schickt -- eine erfundene
     // Entfernung wäre schlimmer als keine.
-    function orte() {
+    function neuOrdnen() {
         var alle = Api.pois
-        var liste = []
+        var neu = []
         for (var i = 0; i < alle.length; ++i) {
             if (page.nurOffene && alle[i].collected)
                 continue
-            liste.push(alle[i])
+            neu.push(alle[i])
         }
+        if (Recorder.positionValid) {
+            neu.sort(function(a, b) { return entfernung(a) - entfernung(b) })
+            sortBreite = Recorder.latitude
+            sortLaenge = Recorder.longitude
+            sortiert = true
+        }
+        reihenfolge = neu
+    }
+
+    // Ein Fahrrad macht in 50 m keine neue Rangfolge -- und wenn doch,
+    // kommt sie beim nächsten Schwellenwert.
+    function vielleichtNeuOrdnen() {
         if (!Recorder.positionValid)
-            return liste
-        liste.sort(function(a, b) { return entfernung(a) - entfernung(b) })
-        return liste
+            return
+        if (!sortiert) {
+            neuOrdnen()
+            return
+        }
+        if (Api.metresBetween(sortBreite, sortLaenge,
+                              Recorder.latitude, Recorder.longitude) > 50)
+            neuOrdnen()
     }
 
     function entfernung(ort) {
@@ -58,9 +85,19 @@ ThemedPage {
         if (status === PageStatus.Active) {
             Recorder.startPositioning()
             laden()
+            neuOrdnen()
         } else if (status === PageStatus.Inactive) {
             Recorder.stopPositioning()
         }
+    }
+
+    // Nicht an jedem Fix, aber oft genug, dass die Reihenfolge stimmt,
+    // sobald man ein Stück gefahren ist.
+    Timer {
+        interval: 10000
+        repeat: true
+        running: page.status === PageStatus.Active
+        onTriggered: page.vielleichtNeuOrdnen()
     }
 
     Connections {
@@ -71,19 +108,26 @@ ThemedPage {
                 page.laden()
             }
         }
-        onPoisChanged: if (Api.poiMessage.length > 0) hinweis.zeige(Api.poiMessage)
+        onPoisChanged: {
+            page.neuOrdnen()
+            if (Api.poiMessage.length > 0)
+                hinweis.zeige(Api.poiMessage)
+        }
     }
 
     SilicaListView {
         id: liste
         anchors.fill: parent
-        model: page.orte()
+        model: page.reihenfolge
 
         PullDownMenu {
             MenuItem {
                 text: page.nurOffene ? qsTr("Auch eingesammelte zeigen")
                                      : qsTr("Nur offene zeigen")
-                onClicked: page.nurOffene = !page.nurOffene
+                onClicked: {
+                    page.nurOffene = !page.nurOffene
+                    page.neuOrdnen()
+                }
             }
             MenuItem { text: qsTr("Aktualisieren"); onClicked: page.laden() }
             MenuItem {

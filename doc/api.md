@@ -613,3 +613,26 @@ nicht messen: ob `/pois/collect` die Orte einer Aktion ausgibt, bei der man
 mitmacht, wie die Antwort von `markasfound` im Erfolgsfall aussieht, und was
 ein Fahrtenbuch mit Einträgen zurückgibt. Alles dazu steht im Port so, wie es
 im Binär steht, und ist dort als ungeprüft vermerkt.
+
+### 12.5 Nachtrag: die gemessene Antwort von `markasfound`
+
+`PUT /pois/markasfound` hat auf eine unsinnige Anfrage mit **HTTP 200 und einem
+völlig leeren Körper** geantwortet — ohne Hülle. Diese eine gemessene
+Tatsache war in der ersten Fassung von 0.8.0 als Störung verdrahtet: ein leerer
+Körper fällt durch `Json::parse` und landete in `lastError`. Der Dienst hätte
+den Ort also eingetragen, und die App hätte einen Fehler gemeldet. Seit 0.8.1
+ist der Fall eigens behandelt: „Gemeldet – Bestätigung steht aus", danach wird
+die Ortsliste neu gelesen, und der Haken kommt aus ihr.
+
+Dazu zwei Sicherungen beim Einsammeln. Sie sind **kein** Sammelradius — den hat
+die Original-App nicht und dieser Port auch nicht —, sondern Grenzen gegen den
+einen Fall, der sich ohne laufende Aktion nicht messen ließ: dass ein Kasten
+ohne Fläche dem Dienst mehr entlockt als den Ort, vor dem man steht. Bietet er
+mehr als fünf Orte auf einmal an, wird keiner eingetragen; und bietet er einen
+an, dessen Koordinaten wir kennen und der über einen Kilometer weit weg liegt,
+wird dieser übersprungen. Markieren lässt sich nicht zurückholen.
+
+Im Original gibt es nachweislich keinen solchen Filter: `gps_tracking_cubit`
+holt über `calculateBounds` die nicht eingesammelten Orte und meldet sie nur
+weiter; `putPoisFound` hängt an `redeemQrCode` (QR-Code am Ort) und an
+`poisFound`. Zwischen Holen und Melden filtert nichts nach Entfernung.

@@ -39,6 +39,13 @@ QString zielSignatur()
 // x-minimum-required-app-version steht derzeit auf 10.3.0.
 const char *ProtocolVersion = "10.4.2";
 
+// Sicherungen fuers Einsammeln. Beides ist **kein** Sammelradius -- den
+// hat die Original-App nicht und dieser Port auch nicht. Es sind Grenzen
+// gegen den einen ungemessenen Fall: dass ein Kasten ohne Flaeche dem
+// Dienst mehr entlockt als den Ort, vor dem man steht.
+const int SammelGrenze = 5;
+const double SammelGrenzeMeter = 1000.0;
+
 // Laravel's own date format, which is what the app's binary carries.
 QString stamp(const QDateTime &when)
 {
@@ -57,6 +64,9 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
 #endif
     m_journeyChallenge(0),
     m_poiChallenge(0),
+    m_collectLat(0),
+    m_collectLon(0),
+    m_collecting(false),
     m_searching(false),
     m_nextTag(1),
     m_open(0)
@@ -422,6 +432,9 @@ void Api::collectHere(double latitude, double longitude)
     const QString ecke = QString::number(latitude, 'f', 6) + ","
                        + QString::number(longitude, 'f', 6);
     const QString kasten = "[" + ecke + "],[" + ecke + "]";
+    m_collectLat = latitude;
+    m_collectLon = longitude;
+    m_collecting = true;
     send(PoiCollectRequest, "GET",
          "/pois/collect?found=false&boundary=" + QString::fromLatin1(
              QUrl::toPercentEncoding(kasten, "[],")),
@@ -760,6 +773,20 @@ void Api::replyFinished(int tag, int status, const QByteArray &body, const QStri
         return;
     }
 
+    // Nachgemessen: /pois/markasfound antwortet mit HTTP 200 und einem
+    // voellig leeren Koerper -- ohne Huelle. Das ist keine Stoerung, und
+    // es darf nicht als eine aussehen: sonst meldet die App einen Fehler,
+    // waehrend der Ort in Wahrheit steht. Ob er steht, sagt uns nur die
+    // Liste, also wird sie neu gelesen.
+    if (pending.kind == PoiFoundRequest && status == 200 && body.trimmed().isEmpty()) {
+        setError(QString());
+        m_poiMessage = tr("Gemeldet – Bestätigung steht aus");
+        emit poisChanged();
+        if (m_poiChallenge > 0)
+            fetchPois(m_poiChallenge);
+        return;
+    }
+
     QString parseError;
     const QVariant parsed = Json::parse(body, &parseError);
     if (parsed.type() != QVariant::Map) {
@@ -960,22 +987,66 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         // Reichweite -- das Original sagt dort "Fahre noch naeher an den
         // Ort und versuche es erneut".
         const QVariantList gefunden = map.value("pois").toList();
+        m_collecting = false;
         if (gefunden.isEmpty()) {
             m_poiMessage = tr("Kein Ort in Reichweite");
             emit poisChanged();
             break;
         }
+
+        // Eine Sicherung, kein eigener Radius: welcher Abstand reicht,
+        // entscheidet weiter der Dienst. Nur falls ein entarteter Kasten
+        // ihm je die ganze Aktion entlocken sollte, soll nicht vom Sofa
+        // aus alles abgehakt werden -- Markieren laesst sich nicht
+        // zurueckholen.
+        if (gefunden.size() > SammelGrenze) {
+            m_poiMessage = tr("%1 Orte auf einmal angeboten – das sieht nicht nach "
+                              "einem Ort vor der Nase aus, es wurde nichts "
+                              "eingetragen.").arg(gefunden.size());
+            emit poisChanged();
+            break;
+        }
+
         QStringList namen;
+        QStringList verworfen;
         for (int i = 0; i < gefunden.size(); ++i) {
-            const QVariantMap ort = gefunden.at(i).toMap();
+            const QVariantMap ort = Geo::ortFlach(gefunden.at(i).toMap(), QString());
             const qlonglong id = ort.value("id").toLongLong();
             if (id <= 0)
                 continue;
+            // Kennen wir die Koordinaten -- entweder aus der Antwort
+            // selbst oder aus der schon geladenen Liste --, muss der Ort
+            // auch in der Naehe liegen.
+            double breite = ort.value("latitude").toDouble();
+            double laenge = ort.value("longitude").toDouble();
+            bool bekannt = ort.value("hasPosition").toBool();
+            if (!bekannt) {
+                for (int k = 0; k < m_pois.size(); ++k) {
+                    const QVariantMap kandidat = m_pois.at(k).toMap();
+                    if (kandidat.value("id").toLongLong() == id
+                        && kandidat.value("hasPosition").toBool()) {
+                        breite = kandidat.value("latitude").toDouble();
+                        laenge = kandidat.value("longitude").toDouble();
+                        bekannt = true;
+                        break;
+                    }
+                }
+            }
+            if (bekannt
+                && metresBetween(m_collectLat, m_collectLon, breite, laenge) > SammelGrenzeMeter) {
+                verworfen << ort.value("name").toString();
+                continue;
+            }
             namen << ort.value("name").toString();
             markPoiFound(id);
         }
-        m_poiMessage = namen.isEmpty() ? tr("Kein Ort in Reichweite")
-                                       : namen.join(", ");
+        if (!namen.isEmpty())
+            m_poiMessage = namen.join(", ");
+        else if (!verworfen.isEmpty())
+            m_poiMessage = tr("Der Dienst bot einen Ort an, der weit weg liegt "
+                              "(%1) – nichts eingetragen.").arg(verworfen.join(", "));
+        else
+            m_poiMessage = tr("Kein Ort in Reichweite");
         emit poisChanged();
         break;
     }

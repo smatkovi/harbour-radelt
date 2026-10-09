@@ -274,6 +274,11 @@ private:
     QVariantList m_journeyLogs;
     qlonglong m_journeyChallenge;
     qlonglong m_poiChallenge;
+    // Die Position, die als Kasten gemeldet wurde -- als Sicherung gegen
+    // eine Antwort, die mehr hergibt als das, wovor man steht.
+    double m_collectLat;
+    double m_collectLon;
+    bool m_collecting;
     QVariantList m_poiRoutes;
     QVariantList m_pois;
     QString m_poiMessage;

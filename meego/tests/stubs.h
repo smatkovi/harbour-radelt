@@ -31,19 +31,21 @@ public:
 class StubRecorder : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(bool recording READ flag NOTIFY changed)
-    Q_PROPERTY(bool paused READ flag WRITE setFlag NOTIFY changed)
-    Q_PROPERTY(bool positionValid READ flag NOTIFY changed)
-    Q_PROPERTY(double latitude READ number NOTIFY changed)
-    Q_PROPERTY(double longitude READ number NOTIFY changed)
-    Q_PROPERTY(double accuracy READ number NOTIFY changed)
-    Q_PROPERTY(double distance READ number NOTIFY changed)
-    Q_PROPERTY(double ascent READ number NOTIFY changed)
-    Q_PROPERTY(int movingSeconds READ count NOTIFY changed)
-    Q_PROPERTY(int totalSeconds READ count NOTIFY changed)
-    Q_PROPERTY(double averageSpeed READ number NOTIFY changed)
-    Q_PROPERTY(double currentSpeed READ number NOTIFY changed)
-    Q_PROPERTY(int pointCount READ count NOTIFY changed)
+    // Die NOTIFY-Namen muessen die echten sein, sonst findet der Pruefer
+    // einen Connections-Block auf ein nicht vorhandenes Signal nicht.
+    Q_PROPERTY(bool recording READ flag NOTIFY recordingChanged)
+    Q_PROPERTY(bool paused READ flag WRITE setFlag NOTIFY pausedChanged)
+    Q_PROPERTY(bool positionValid READ flag NOTIFY positionChanged)
+    Q_PROPERTY(double latitude READ number NOTIFY positionChanged)
+    Q_PROPERTY(double longitude READ number NOTIFY positionChanged)
+    Q_PROPERTY(double accuracy READ number NOTIFY accuracyChanged)
+    Q_PROPERTY(double distance READ number NOTIFY statisticsChanged)
+    Q_PROPERTY(double ascent READ number NOTIFY statisticsChanged)
+    Q_PROPERTY(int movingSeconds READ count NOTIFY statisticsChanged)
+    Q_PROPERTY(int totalSeconds READ count NOTIFY statisticsChanged)
+    Q_PROPERTY(double averageSpeed READ number NOTIFY statisticsChanged)
+    Q_PROPERTY(double currentSpeed READ number NOTIFY statisticsChanged)
+    Q_PROPERTY(int pointCount READ count NOTIFY statisticsChanged)
     Q_PROPERTY(bool sourceAvailable READ flag CONSTANT)
 public:
     bool flag() const { return false; }
@@ -58,6 +60,11 @@ public slots:
     void reset() {}
 signals:
     void changed();
+    void recordingChanged();
+    void pausedChanged();
+    void positionChanged();
+    void accuracyChanged();
+    void statisticsChanged();
 };
 
 class StubRides : public QAbstractListModel
