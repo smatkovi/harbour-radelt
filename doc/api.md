@@ -397,7 +397,18 @@ Die echten Antwortformate stehen jetzt gemessen in
 **camelCase** (`kmCount`, `savedCO2`, `savedMoney`, `daysTracked`, `elevation`),
 nicht snake_case wie in §5.7 vermutet.
 
-### 10.6 Die Anmeldung mit Passwort: erschöpfend geprüft, nimmt der Server nicht
+### 10.6 Die Anmeldung mit Passwort — HIER STAND EIN FALSCHER SCHLUSS
+
+> **Berichtigt am 09.10.2026.** Der Abschnitt schloss, der Server nehme dieses
+> Konto nicht an. Das war **falsch**. Es war von Anfang an ein Formatproblem:
+> die Kennung heisst `user` (nicht `email`), und es fehlte die Pflicht-Signatur
+> `secure`. Mit beidem meldet sich dasselbe Konto anstandslos an
+> (`success:true`, am Server geprueft). Siehe **§11**. Dass auch die
+> Original-APK scheiterte, hat zu dem Fehlschluss verleitet -- das hatte einen
+> anderen Grund. Der folgende Abschnitt bleibt als Beleg stehen, welche
+> Varianten geprueft wurden; seine Schlussfolgerung gilt nicht.
+
+### 10.6 (alt) Die Anmeldung mit Passwort: erschöpfend geprüft
 
 Dasselbe Konto meldet sich am **Webformular** von `dashboard.radelt.at` an
 (302 auf `/dashboard/home`), an `/api/v2/login` nicht. Und: die **Original-APK**
@@ -443,3 +454,45 @@ vielleicht nie durchlaufen und ist der Schnittstelle unbekannt.
 dasselbe Konto anmelden. Gelingt es ihr auch nicht, liegt es am Konto und nicht am
 Nachbau; gelingt es, verrät ihr Zwischenspeicher (`dio_cache_interceptor` auf Hive) die
 echten Formate — `tools/read-android-app.sh` liest ihn aus.
+
+
+---
+
+## 11. Die Anmeldung, aus dem Binär rekonstruiert  `[GEMESSEN]`
+
+`blutter` (github.com/worawit/blutter) hat auf dem Baurechner das Dart-Abbild aus
+`libapp.so` rekonstruiert; Dart 3.10.8 / Flutter 3.38.9. Daraus stammt der echte
+Anmelde-Körper (`_$LoginRequestToJson`), **am Server bestätigt**:
+
+```json
+POST /api/v2/login
+{
+  "secure":          "<md5hex>",
+  "user":            "<Kennung>",
+  "password":        "<Passwort>",
+  "oneSignalUserId": null,
+  "platform":        "android",
+  "appVersion":      "10.4.2",
+  "language":        "de"
+}
+```
+
+**Die Signatur** (`SecureRequest.createPseudoHmac`):
+
+    secure = md5Hex( user + password + "TourDeBoedele" )
+
+Das Salz steht wortwörtlich im Binär; die Reihenfolge `user` dann `password` ist am
+Server geprüft (die andere Reihenfolge wurde ebenfalls probiert und abgelehnt).
+`md5` aus `package:crypto`, Hex klein geschrieben.
+
+**Die drei Punkte, an denen jede frühere Probe scheitern musste:**
+1. Feldname **`user`** — nicht `email`. Die *Registrierung* nimmt dagegen `email`;
+   die beiden Routen sind uneinheitlich, was in die Irre führte.
+2. Das Pflichtfeld **`secure`**.
+3. Die Zusatzfelder `platform`, `appVersion`, `language`, `oneSignalUserId`.
+
+Die Antwort trägt `data.api_token` — bytegleich mit dem Keks `fw_login`, den der
+Server im selben Atemzug setzt.
+
+`tests/coretest.cpp` prüft das Signaturverfahren gegen einen festen Sollwert:
+bricht es, bricht die Anmeldung, und zwar stillschweigend.

@@ -16,6 +16,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <QCryptographicHash>
+
 #include "json.h"
 #include "track.h"
 
@@ -167,6 +169,20 @@ static void testTrack()
     checkNear(hill.ascent(), 390, 20, "echter Anstieg wird gezaehlt");
 }
 
+static void testLoginSignature()
+{
+    // Die Anmelde-Signatur der Plattform: md5(Kennung + Passwort + Salz),
+    // klein geschriebene Hex-Ziffern. Der Wert hier ist mit demselben
+    // Verfahren erzeugt, das am Server "success:true" geliefert hat --
+    // bricht das Verfahren, bricht die Anmeldung, und zwar still.
+    const QByteArray roh = QByteArray("probe") + "geheim" + "TourDeBoedele";
+    const QString secure = QString::fromLatin1(
+        QCryptographicHash::hash(roh, QCryptographicHash::Md5).toHex());
+    // Fester Sollwert: md5("probe" + "geheim" + "TourDeBoedele").
+    check(secure == QLatin1String("49c51e15e64e28ecd6c5a24f8b347117"),
+          "Signatur trifft den Sollwert -- sonst lehnt der Server jede Anmeldung ab");
+}
+
 static void testGpx()
 {
     Track track;
@@ -198,6 +214,7 @@ int main(int argc, char *argv[])
     testDistance();
     testTrack();
     testGpx();
+    testLoginSignature();
 
     out << (failures ? QString("%1 Fehler\n").arg(failures)
                      : QString("alles in Ordnung\n"));

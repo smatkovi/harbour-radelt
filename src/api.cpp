@@ -6,13 +6,23 @@
 #include "settings.h"
 #include "track.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
+#include <QLocale>
 #include <QUrl>
 
 namespace
 {
 const char *BaseUrl = "https://dashboard.radelt.at/api/v2";
+
+// Das Salz der Anmelde-Signatur, wortwoertlich aus dem Binaer der
+// Original-App. Ohne die Signatur nimmt der Server keine Anmeldung an.
+const char *LoginSalt = "TourDeBoedele";
+
+// Die Protokollfassung, die wir dem Server nennen: seine Kopfzeile
+// x-minimum-required-app-version steht derzeit auf 10.3.0.
+const char *ProtocolVersion = "10.4.2";
 
 // Laravel's own date format, which is what the app's binary carries.
 QString stamp(const QDateTime &when)
@@ -98,11 +108,34 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
 void Api::login(const QString &user, const QString &password)
 {
     setError(QString());
+
+    // Der Anmelde-Koerper stammt aus dem rekonstruierten Dart-Abbild der
+    // Original-App (_$LoginRequestToJson, siehe doc/api.md §11) und ist am
+    // Server geprueft. Zwei Dinge daran sind nicht zu erraten:
+    //
+    //   * Die Kennung heisst "user", nicht "email" -- obwohl die
+    //     Registrierung auf derselben Schnittstelle "email" nimmt.
+    //   * Es gibt eine Signatur "secure" ueber Kennung und Passwort mit
+    //     einem festen Salz. Ohne sie antwortet der Server auf jeden
+    //     Versuch mit authentication_failed, egal wie richtig der Rest ist.
+    const QByteArray roh = (user + password + QLatin1String(LoginSalt)).toUtf8();
+    const QString secure =
+        QString::fromLatin1(QCryptographicHash::hash(roh, QCryptographicHash::Md5).toHex());
+
     QVariantMap body;
-    // The app sends the field as "email" even when a user name is typed;
-    // the server takes both in that field.
-    body.insert("email", user);
+    body.insert("secure", secure);
+    body.insert("user", user);
     body.insert("password", password);
+    // Kein Push-Dienst in dieser App; das Feld gehoert aber in den Koerper.
+    body.insert("oneSignalUserId", QVariant());
+    body.insert("platform", "android");
+    // Der Server verlangt eine Fassung, die nicht aelter ist als die in
+    // seinem Kopf x-minimum-required-app-version (derzeit 10.3.0). Das ist
+    // die Fassung der Original-App, nicht unsere eigene Zaehlung -- sie
+    // sagt dem Server, welches Protokoll wir sprechen.
+    body.insert("appVersion", ProtocolVersion);
+    body.insert("language", QLocale::system().name().left(2));
+
     m_settings->setEmail(user);
     send(LoginRequest, "POST", "/login", body);
 }
