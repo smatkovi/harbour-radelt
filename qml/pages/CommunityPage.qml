@@ -15,6 +15,10 @@ Page {
 
         PullDownMenu {
             MenuItem {
+                text: qsTr("Freund:in suchen")
+                onClicked: pageStack.push(Qt.resolvedUrl("FindFriendsPage.qml"))
+            }
+            MenuItem {
                 visible: Api.shareUrl.length > 0
                 text: qsTr("Einladungslink kopieren")
                 onClicked: Clipboard.text = Api.shareUrl
@@ -36,8 +40,29 @@ Page {
             Repeater {
                 model: Api.friends
                 delegate: ListItem {
+                    id: freund
                     contentHeight: Theme.itemSizeSmall
                     width: content.width
+
+                    menu: ContextMenu {
+                        MenuItem {
+                            // Eine offene Anfrage der anderen Seite.
+                            visible: modelData.friendshipStatus === "PENDING"
+                            text: qsTr("Annehmen")
+                            onClicked: Api.acceptFriend(modelData.id)
+                        }
+                        MenuItem {
+                            visible: modelData.friendshipStatus === "PENDING"
+                            text: qsTr("Ablehnen")
+                            onClicked: Api.declineFriend(modelData.id)
+                        }
+                        MenuItem {
+                            text: qsTr("Entfernen")
+                            onClicked: freund.remorseAction(qsTr("Freundschaft beenden"),
+                                           function() { Api.removeFriend(modelData.id) })
+                        }
+                    }
+
                     Column {
                         x: Theme.horizontalPageMargin
                         anchors.verticalCenter: parent.verticalCenter
@@ -72,7 +97,7 @@ Page {
                 color: Theme.secondaryColor
                 wrapMode: Text.Wrap
                 visible: Api.friends.length === 0
-                text: Api.loggedIn ? qsTr("Noch niemand. Über das Menü einen Einladungslink teilen.")
+                text: Api.loggedIn ? qsTr("Noch niemand. Über das Menü suchen oder einen Einladungslink teilen.")
                                    : qsTr("Nicht angemeldet")
             }
 
@@ -81,8 +106,29 @@ Page {
             Repeater {
                 model: Api.organisations
                 delegate: ListItem {
+                    id: freund
                     contentHeight: Theme.itemSizeSmall
                     width: content.width
+
+                    menu: ContextMenu {
+                        MenuItem {
+                            // Eine offene Anfrage der anderen Seite.
+                            visible: modelData.friendshipStatus === "PENDING"
+                            text: qsTr("Annehmen")
+                            onClicked: Api.acceptFriend(modelData.id)
+                        }
+                        MenuItem {
+                            visible: modelData.friendshipStatus === "PENDING"
+                            text: qsTr("Ablehnen")
+                            onClicked: Api.declineFriend(modelData.id)
+                        }
+                        MenuItem {
+                            text: qsTr("Entfernen")
+                            onClicked: freund.remorseAction(qsTr("Freundschaft beenden"),
+                                           function() { Api.removeFriend(modelData.id) })
+                        }
+                    }
+
                     Column {
                         x: Theme.horizontalPageMargin
                         anchors.verticalCenter: parent.verticalCenter

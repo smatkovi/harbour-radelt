@@ -1,6 +1,6 @@
 Name:       harbour-radelt
 Summary:    Kilometres for Österreich radelt
-Version:    0.2.0
+Version:    0.3.0
 Release:    1
 Group:      Qt/Qt
 License:    GPLv3

@@ -8,6 +8,7 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <QUrl>
 
 namespace
 {
@@ -30,7 +31,8 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
     m_http(new ProcessHttp(this)),
 #endif
     m_nextTag(1),
-    m_open(0)
+    m_open(0),
+    m_searching(false)
 {
     connect(m_http, SIGNAL(finished(int,int,QByteArray,QString)),
             this, SLOT(replyFinished(int,int,QByteArray,QString)));
@@ -192,6 +194,62 @@ void Api::fetchTimeline()
     send(TrophiesRequest, "GET", "/trophies", QVariantMap());
 }
 
+void Api::searchFriends(const QString &text)
+{
+    if (!loggedIn())
+        return;
+    if (text.trimmed().length() < 3) {
+        // Die Original-App verlangt dasselbe ("Bitte gib mindestens 3
+        // Buchstaben ein."); mit weniger antwortet der Server mit einer
+        // Fundgrube, die niemandem hilft.
+        m_found.clear();
+        m_searching = false;
+        emit searchChanged();
+        return;
+    }
+    m_searching = true;
+    emit searchChanged();
+    QString pfad = "/friends/search?query=";
+    pfad += QString::fromLatin1(QUrl::toPercentEncoding(text.trimmed()));
+    send(SearchRequest, "GET", pfad, QVariantMap());
+}
+
+void Api::requestFriend(qlonglong friendId)
+{
+    if (!loggedIn() || friendId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("friendId", friendId);
+    send(FriendActionRequest, "POST", "/friend/request", body);
+}
+
+void Api::acceptFriend(qlonglong friendId)
+{
+    if (!loggedIn() || friendId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("friendId", friendId);
+    send(FriendActionRequest, "POST", "/friend/accept", body);
+}
+
+void Api::declineFriend(qlonglong friendId)
+{
+    if (!loggedIn() || friendId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("friendId", friendId);
+    send(FriendActionRequest, "POST", "/friend/decline", body);
+}
+
+void Api::removeFriend(qlonglong friendId)
+{
+    if (!loggedIn() || friendId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("friendId", friendId);
+    send(FriendActionRequest, "DELETE", "/friend/remove", body);
+}
+
 void Api::uploadRide(const QString &rideId)
 {
     if (!loggedIn()) {
@@ -344,6 +402,11 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (message.isEmpty())
             message = tr("The server refused the request");
         setError(message);
+        if (pending.kind == SearchRequest) {
+            m_found.clear();
+            m_searching = false;
+            emit searchChanged();
+        }
         if (pending.kind == RideSaveRequest || pending.kind == TrackSaveRequest)
             emit rideUploaded(pending.rideId, false, message);
         return;
@@ -419,6 +482,17 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         if (m_organisations.isEmpty())
             m_organisations = data.toList();
         emit communityChanged();
+        break;
+    case SearchRequest:
+        // Die Suche liefert people[] mit kleingeschriebenen Feldern
+        // (firstname/lastname), anders als /friends -- gemessen.
+        m_found = map.value("people").toList();
+        m_searching = false;
+        emit searchChanged();
+        break;
+    case FriendActionRequest:
+        // Der Server ist die Wahrheit über den Stand der Freundschaft.
+        fetchCommunity();
         break;
     case ShareUrlRequest:
         m_shareUrl = map.value("shareUrl").toString();

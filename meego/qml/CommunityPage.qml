@@ -42,6 +42,19 @@ Page {
                 delegate: Column {
                     x: 16
                     width: page.width - 32
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressAndHold: {
+                            if (modelData.friendshipStatus === "PENDING") {
+                                Api.acceptFriend(modelData.id)
+                                appWindow.showMessage(qsTr("Anfrage angenommen"))
+                            } else {
+                                Api.removeFriend(modelData.id)
+                                appWindow.showMessage(qsTr("Freundschaft beendet"))
+                            }
+                        }
+                    }
                     Label {
                         width: parent.width
                         elide: Text.ElideRight
@@ -112,6 +125,10 @@ Page {
     ToolBarLayout {
         id: tools
         ToolIcon { iconId: "toolbar-back"; onClicked: pageStack.pop() }
+        ToolIcon {
+            iconId: "toolbar-search"
+            onClicked: pageStack.push(Qt.resolvedUrl("FindFriendsPage.qml"))
+        }
         ToolIcon { iconId: "toolbar-refresh"; onClicked: Api.fetchCommunity() }
     }
 }

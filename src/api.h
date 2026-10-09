@@ -34,6 +34,8 @@ class Api : public QObject
     Q_PROPERTY(QVariantList friends READ friends NOTIFY communityChanged)
     Q_PROPERTY(QVariantList organisations READ organisations NOTIFY communityChanged)
     Q_PROPERTY(QString shareUrl READ shareUrl NOTIFY communityChanged)
+    Q_PROPERTY(QVariantList foundPeople READ foundPeople NOTIFY searchChanged)
+    Q_PROPERTY(bool searching READ searching NOTIFY searchChanged)
     Q_PROPERTY(QVariantMap dashboard READ dashboard NOTIFY dashboardChanged)
     // Die Jahreszahlen der Übersicht, flach und schon umgerechnet.
     Q_PROPERTY(QVariantMap yearStats READ yearStats NOTIFY dashboardChanged)
@@ -53,6 +55,8 @@ public:
     QVariantList friends() const { return m_friends; }
     QVariantList organisations() const { return m_organisations; }
     QString shareUrl() const { return m_shareUrl; }
+    QVariantList foundPeople() const { return m_found; }
+    bool searching() const { return m_searching; }
     QVariantMap dashboard() const { return m_dashboard; }
     QVariantMap yearStats() const { return m_yearStats; }
     QVariantList months() const { return m_months; }
@@ -83,6 +87,16 @@ public slots:
     // Verlauf und Trophäen für die Verlaufsseite.
     void fetchTimeline();
 
+    // Freund:innen. Die Suche braucht mindestens drei Buchstaben -- so
+    // hält es die Original-App, und der Server findet mit weniger ohnehin
+    // zu viel. Die Aktionen nehmen alle die Kennung der anderen Person
+    // unter dem Namen "friendId" (am Server nachgemessen).
+    Q_INVOKABLE void searchFriends(const QString &text);
+    Q_INVOKABLE void requestFriend(qlonglong friendId);
+    Q_INVOKABLE void acceptFriend(qlonglong friendId);
+    Q_INVOKABLE void declineFriend(qlonglong friendId);
+    Q_INVOKABLE void removeFriend(qlonglong friendId);
+
 signals:
     void loggedInChanged();
     void busyChanged();
@@ -90,6 +104,7 @@ signals:
     void lastErrorChanged();
     void bikesChanged();
     void communityChanged();
+    void searchChanged();
     void timelineChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
@@ -104,7 +119,8 @@ private:
     enum Kind { LoginRequest, PersonRequest, BikesRequest, DashboardRequest,
                 RideSaveRequest, TrackSaveRequest, BikeSaveRequest,
                 BikeDeleteRequest, FriendsRequest, OrganisationsRequest,
-                ShareUrlRequest, TimelineRequest, TrophiesRequest };
+                ShareUrlRequest, TimelineRequest, TrophiesRequest,
+                SearchRequest, FriendActionRequest };
 
     struct Pending
     {
@@ -137,6 +153,8 @@ private:
     QVariantList m_months;
     QVariantList m_timeline;
     QVariantList m_trophies;
+    QVariantList m_found;
+    bool m_searching;
     QString m_token;
     QString m_lastError;
     QStringList m_queue;                // ride ids waiting to go up

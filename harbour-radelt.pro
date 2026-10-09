@@ -48,6 +48,7 @@ DISTFILES += \
     qml/pages/CommunityPage.qml \
     qml/pages/BikesPage.qml \
     qml/pages/BikeDialog.qml \
+    qml/pages/FindFriendsPage.qml \
     qml/components/BigNumber.qml \
 
 SAILFISHAPP_ICONS = 86x86 108x108 128x128 172x172
