@@ -41,6 +41,8 @@ class Api : public QObject
     // Aktionen: was man mitmachen kann und was man schon mitmacht.
     Q_PROPERTY(QVariantList openChallenges READ openChallenges NOTIFY challengesChanged)
     Q_PROPERTY(QVariantList myChallenges READ myChallenges NOTIFY challengesChanged)
+    Q_PROPERTY(QVariantList goals READ goals NOTIFY goalsChanged)
+    Q_PROPERTY(QVariantList goalTemplates READ goalTemplates NOTIFY goalsChanged)
     Q_PROPERTY(QVariantMap person READ person NOTIFY personChanged)
     Q_PROPERTY(QVariantList news READ news NOTIFY newsChanged)
     Q_PROPERTY(QVariantList sponsors READ sponsors NOTIFY newsChanged)
@@ -72,6 +74,8 @@ public:
     QVariantList trophies() const { return m_trophies; }
     QVariantList openChallenges() const { return m_openChallenges; }
     QVariantList myChallenges() const { return m_myChallenges; }
+    QVariantList goals() const { return m_goals; }
+    QVariantList goalTemplates() const { return m_goalTemplates; }
     QVariantMap person() const { return m_person; }
     QVariantList news() const { return m_news; }
     QVariantList sponsors() const { return m_sponsors; }
@@ -112,6 +116,16 @@ public slots:
     // Im Binär heißt das SaveRzaRequest (Radelt zur Arbeit).
     Q_INVOKABLE void addCyclingDay(qlonglong challengeId, const QDate &day);
 
+    // Ziele. Datum als reines yyyy-MM-dd -- mit Uhrzeit stürzt die Route
+    // ab, und goalId muss bei einem neuen Ziel fehlen oder null sein (eine
+    // 0 bringt sie ebenfalls zum Absturz). Alles am Server nachgemessen.
+    Q_INVOKABLE void fetchGoals();
+    Q_INVOKABLE void saveGoal(const QString &name, const QString &beschreibung,
+                              double kilometer, const QDate &von, const QDate &bis,
+                              qlonglong goalId);
+    Q_INVOKABLE void deleteGoal(qlonglong goalId);
+    Q_INVOKABLE void selectGoal(qlonglong goalId, bool dabei);
+
     // Profil. Ein leerer Körper ist beim Dienst ein Leerlauf und gibt das
     // volle Profil zurück -- deshalb taugt dieselbe Route zum Abrufen.
     // Geprüft werden email, firstName und lastName (HTTP 409); nickname
@@ -148,6 +162,7 @@ signals:
     void timelineChanged();
     void challengesChanged();
     void newsChanged();
+    void goalsChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
     // The server says this app is too old for it; the pages show a hint.
@@ -165,7 +180,8 @@ private:
                 SearchRequest, FriendActionRequest, ChallengesRequest,
                 ChallengeActionRequest, CyclingDayRequest, PersonUpdateRequest,
                 RideUpdateRequest, RideDeleteRequest, NewsRequest,
-                SponsorsRequest, NotificationsRequest };
+                SponsorsRequest, NotificationsRequest, GoalsRequest,
+                GoalActionRequest };
 
     struct Pending
     {
@@ -199,6 +215,8 @@ private:
     QVariantList m_months;
     QVariantList m_timeline;
     QVariantList m_trophies;
+    QVariantList m_goals;
+    QVariantList m_goalTemplates;
     QVariantList m_news;
     QVariantList m_sponsors;
     QVariantList m_notifications;

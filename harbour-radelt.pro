@@ -53,6 +53,8 @@ DISTFILES += \
     qml/pages/ChallengesPage.qml \
     qml/pages/ProfilePage.qml \
     qml/pages/NewsPage.qml \
+    qml/pages/GoalsPage.qml \
+    qml/pages/GoalDialog.qml \
     qml/components/BigNumber.qml \
     qml/components/ThemedPage.qml \
 

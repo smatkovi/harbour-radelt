@@ -20,6 +20,20 @@ const char *BaseUrl = "https://dashboard.radelt.at/api/v2";
 // Original-App. Ohne die Signatur nimmt der Server keine Anmeldung an.
 const char *LoginSalt = "TourDeBoedele";
 
+// Die Signatur eines Ziels ist eine Konstante: im Konstruktor von
+// CreateGoalRequest wird die Werteliste als leere Liste angelegt (im
+// rekonstruierten Maschinencode nachgesehen: _GrowableList mit Laenge 0,
+// waehrend die Anmeldung dort zwei Werte ablegt). Es bleibt also
+// md5("TourDeBoedele"). Am Server nachgemessen: Ziele gehen **auch ohne**
+// das Feld durch -- mitgeschickt wird es trotzdem, weil die Original-App
+// es schickt und der Dienst die Pruefung jederzeit nachruesten kann.
+QString zielSignatur()
+{
+    const QByteArray roh(LoginSalt);
+    return QString::fromLatin1(
+        QCryptographicHash::hash(roh, QCryptographicHash::Md5).toHex());
+}
+
 // Die Protokollfassung, die wir dem Server nennen: seine Kopfzeile
 // x-minimum-required-app-version steht derzeit auf 10.3.0.
 const char *ProtocolVersion = "10.4.2";
@@ -158,6 +172,8 @@ void Api::logout()
     m_months.clear();
     m_timeline.clear();
     m_trophies.clear();
+    m_goals.clear();
+    m_goalTemplates.clear();
     m_news.clear();
     m_sponsors.clear();
     m_notifications.clear();
@@ -279,6 +295,55 @@ void Api::addCyclingDay(qlonglong challengeId, const QDate &day)
     body.insert("dates", tage);
     body.insert("countDay", true);
     send(CyclingDayRequest, "PUT", "/journeylog/save", body);
+}
+
+void Api::fetchGoals()
+{
+    if (!loggedIn())
+        return;
+    send(GoalsRequest, "GET", "/goals", QVariantMap());
+}
+
+void Api::saveGoal(const QString &name, const QString &beschreibung,
+                   double kilometer, const QDate &von, const QDate &bis,
+                   qlonglong goalId)
+{
+    if (!loggedIn() || name.trimmed().isEmpty())
+        return;
+    QVariantMap body;
+    body.insert("secure", zielSignatur());
+    body.insert("name", name.trimmed());
+    body.insert("description", beschreibung);
+    body.insert("distance", kilometer);
+    // Reines Datum. Mit Uhrzeit antwortet die Route mit HTTP 500.
+    body.insert("dateStart", (von.isValid() ? von : QDate::currentDate()).toString("yyyy-MM-dd"));
+    body.insert("dateEnd", (bis.isValid() ? bis : QDate::currentDate().addMonths(3))
+                           .toString("yyyy-MM-dd"));
+    // Bei einem neuen Ziel muss das Feld null sein -- eine 0 bringt die
+    // Route zum Absturz.
+    if (goalId > 0)
+        body.insert("goalId", goalId);
+    else
+        body.insert("goalId", QVariant());
+    send(GoalActionRequest, "POST", "/goal/save", body);
+}
+
+void Api::deleteGoal(qlonglong goalId)
+{
+    if (!loggedIn() || goalId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("goalId", goalId);
+    send(GoalActionRequest, "DELETE", "/goal/delete", body);
+}
+
+void Api::selectGoal(qlonglong goalId, bool dabei)
+{
+    if (!loggedIn() || goalId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("goalId", goalId);
+    send(GoalActionRequest, "POST", dabei ? "/goal/select" : "/goal/unselect", body);
 }
 
 void Api::updatePerson(const QVariantMap &felder)
@@ -666,6 +731,20 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         // trotzdem "getan".
         fetchChallenges();
         send(DashboardRequest, "GET", "/dashboard", QVariantMap());
+        break;
+    case GoalsRequest: {
+        // Die Antwort trennt eigene Ziele von den Vorlagen, die die
+        // Plattform vorschlaegt.
+        m_goals = map.value("personal").toList();
+        const QVariantList gewaehlt = map.value("selected").toList();
+        for (int i = 0; i < gewaehlt.size(); ++i)
+            m_goals << gewaehlt.at(i);
+        m_goalTemplates = map.value("predefined").toList();
+        emit goalsChanged();
+        break;
+    }
+    case GoalActionRequest:
+        fetchGoals();
         break;
     case PersonUpdateRequest:
         m_person = map.contains("person") ? map.value("person").toMap() : map;
