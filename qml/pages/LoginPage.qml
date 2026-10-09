@@ -1,9 +1,10 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "../components"
 
 // The same two fields as the website: e-mail or user name, and password.
 // The app keeps only the token the server hands back, never the password.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     SilicaFlickable {
@@ -52,7 +53,7 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
-                color: Theme.errorColor
+                color: palette.errorColor
                 visible: Api.lastError.length > 0
                 text: Api.lastError
             }
@@ -62,7 +63,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 text: qsTr("Das Konto ist dasselbe wie auf radelt.at. Angelegt wird es dort, nicht hier.")
             }
         }

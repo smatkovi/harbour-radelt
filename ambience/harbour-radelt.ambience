@@ -1,14 +1,13 @@
 {
-    "wallpaper": "harbour-radelt.jpg",
-    "translationId": "harbour-radelt",
-    "displayName": "Radelt",
-    "favorite": true,
-    "colorScheme": "dark",
-    "highlightColor": "#c00d0d",
-    "secondaryHighlightColor": "#8a0909",
-    "primaryColor": "#ffffff",
-    "secondaryColor": "#b0b0b0",
-    "highlightBackgroundColor": "#c00d0d",
-    "highlightDimmerColor": "#3a0404",
-    "backgroundGlowColor": "#c00d0d"
+    "translationCatalog"        : "harbour-radelt",
+    "displayName"               : "Radelt",
+    "wallpaper"                 : "ambience_radelt.jpg",
+    "highlightColor"            : "#FFE03A3A",
+    "secondaryHighlightColor"   : "#FFC00D0D",
+    "primaryColor"              : "#FFFFFFFF",
+    "secondaryColor"            : "#FFBABABA",
+    "favorite"                  : true,
+    "colorScheme"               : "lightondark",
+    "timestamp"                 : "2026-10-09T10:00:00",
+    "version"                   : 3
 }

@@ -21,6 +21,8 @@ class Settings : public QObject
                NOTIFY keepDisplayOnChanged)
     Q_PROPERTY(double accuracyLimit READ accuracyLimit WRITE setAccuracyLimit
                NOTIFY accuracyLimitChanged)
+    // 0 = Systemfarben des Ambiente, 1 = Rot auf hell, 2 = Rot auf schwarz.
+    Q_PROPERTY(int colorTheme READ colorTheme WRITE setColorTheme NOTIFY colorThemeChanged)
 
 public:
     explicit Settings(QObject *parent = 0);
@@ -41,11 +43,15 @@ public:
     double accuracyLimit() const;
     void setAccuracyLimit(double metres);
 
+    int colorTheme() const;
+    void setColorTheme(int theme);
+
 signals:
     void emailChanged();
     void uploadAutomaticallyChanged();
     void keepDisplayOnChanged();
     void accuracyLimitChanged();
+    void colorThemeChanged();
 
 private:
     QSettings m_store;

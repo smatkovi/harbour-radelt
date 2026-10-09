@@ -11,15 +11,16 @@ Column {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: large ? Theme.fontSizeHuge : Theme.fontSizeLarge
-        // Hausrot statt Theme-Highlight: die Zahlen sind das, was zählt.
-        color: Farben.rot
+        // Der Akzent des gewählten Schemas: unter dem Hausschema das Rot,
+        // unter "Ambience" die Systemfarbe.
+        color: palette.highlightColor
         text: value
     }
     Label {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         font.pixelSize: Theme.fontSizeExtraSmall
-        color: Theme.secondaryColor
+        color: palette.secondaryColor
         wrapMode: Text.Wrap
         text: unit
     }

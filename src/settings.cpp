@@ -72,3 +72,19 @@ void Settings::setAccuracyLimit(double metres)
     m_store.sync();
     emit accuracyLimitChanged();
 }
+
+int Settings::colorTheme() const
+{
+    // Voreingestellt ist das Hausschema auf dunklem Grund: die App wird
+    // am Lenker gelesen, und dort gewinnt der Kontrast.
+    return m_store.value("display/colorTheme", 2).toInt();
+}
+
+void Settings::setColorTheme(int theme)
+{
+    if (theme == colorTheme())
+        return;
+    m_store.setValue("display/colorTheme", theme);
+    m_store.sync();
+    emit colorThemeChanged();
+}

@@ -2,7 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import "../components"
 
-Page {
+ThemedPage {
     id: page
 
     allowedOrientations: Orientation.All
@@ -84,7 +84,7 @@ Page {
                     font.pixelSize: Theme.fontSizeSmall
                     wrapMode: Text.Wrap
                     color: Recorder.accuracy > 0 && Recorder.accuracy <= 25
-                           ? Theme.secondaryColor : Theme.errorColor
+                           ? palette.secondaryColor : palette.errorColor
                     text: !Recorder.sourceAvailable
                           ? qsTr("Kein Ortungsdienst auf diesem Gerät")
                           : Recorder.accuracy < 0
@@ -120,7 +120,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 wrapMode: Text.Wrap
                 visible: Recorder.recording
                 text: qsTr("%n Punkt(e) aufgezeichnet", "", Recorder.pointCount)

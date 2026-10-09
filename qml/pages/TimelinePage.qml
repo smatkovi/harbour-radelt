@@ -5,7 +5,7 @@ import "../components"
 // Der Verlauf: was das Konto als Ereignisse führt (Kilometer, Orte, Ziele,
 // Radeltage), und darüber die Trophäen. Beides kommt vom Server; die
 // lokalen Fahrten stehen auf der Startseite.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     onStatusChanged: if (status === PageStatus.Active) Api.fetchTimeline()
@@ -63,7 +63,7 @@ Page {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: Theme.fontSizeTiny
-                        color: Theme.secondaryColor
+                        color: palette.secondaryColor
                         wrapMode: Text.Wrap
                         maximumLineCount: 2
                         text: modelData.name ? modelData.name
@@ -76,7 +76,7 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 wrapMode: Text.Wrap
                 visible: Api.trophies.length === 0
                 text: Api.loggedIn ? qsTr("Noch keine Trophäe.") : qsTr("Nicht angemeldet")
@@ -108,7 +108,7 @@ Page {
                 Label {
                     width: parent.width
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
+                    color: palette.secondaryColor
                     text: {
                         var d = modelData.date || modelData.created_at || modelData.createdAt
                         return d ? d : ""

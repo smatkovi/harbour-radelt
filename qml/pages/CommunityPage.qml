@@ -1,10 +1,11 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "../components"
 
 // Freund:innen und die Organisationen, für die man radelt. Die Plattform
 // zeigt hier Ränge; wo sie keinen liefert (zu wenige Fahrten, Aktion noch
 // nicht gestartet), steht das auch so da statt einer erfundenen Null.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     onStatusChanged: if (status === PageStatus.Active) Api.fetchCommunity()
@@ -80,7 +81,7 @@ Page {
                         Label {
                             width: parent.width
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            color: Theme.secondaryColor
+                            color: palette.secondaryColor
                             text: (modelData.city ? modelData.city : "")
                                   + (modelData.ranking
                                      ? " · " + qsTr("Rang %1").arg(modelData.ranking)
@@ -94,7 +95,7 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 wrapMode: Text.Wrap
                 visible: Api.friends.length === 0
                 text: Api.loggedIn ? qsTr("Noch niemand. Über das Menü suchen oder einen Einladungslink teilen.")
@@ -141,7 +142,7 @@ Page {
                         Label {
                             width: parent.width
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            color: Theme.secondaryColor
+                            color: palette.secondaryColor
                             text: {
                                 // Die Plattform kennt Verein, Betrieb,
                                 // Gemeinde, Schule und Universität.
@@ -164,7 +165,7 @@ Page {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 wrapMode: Text.Wrap
                 visible: Api.organisations.length === 0
                 text: qsTr("Keine Organisation gewählt. Das geht auf radelt.at.")

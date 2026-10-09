@@ -36,6 +36,7 @@ DISTFILES += \
     qml/harbour-radelt.qml \
     qml/cover/CoverPage.qml \
     qml/components/BigNumber.qml \
+    qml/components/ThemedPage.qml \
     qml/pages/MainPage.qml \
     qml/pages/RecordPage.qml \
     qml/pages/SaveDialog.qml \
@@ -50,13 +51,19 @@ DISTFILES += \
     qml/pages/BikeDialog.qml \
     qml/pages/FindFriendsPage.qml \
     qml/components/BigNumber.qml \
+    qml/components/ThemedPage.qml \
 
 SAILFISHAPP_ICONS = 86x86 108x108 128x128 172x172
 
 # Das eigene Ambiente: taucht nach der Installation in den Einstellungen
 # unter "Ambiente" auf und faerbt das ganze System in die Hausfarben.
-ambience.files = ambience/harbour-radelt.ambience ambience/harbour-radelt.jpg
+# Aufbau wie bei den System-Ambienten: die Beschreibung oben, das Bild in
+# images/. Farben als #AARRGGBB (Alpha zuerst), version 3 -- so liest
+# ambienced sie, mit einem anderen Aufbau taucht das Ambiente gar nicht auf.
+ambience.files = ambience/harbour-radelt.ambience
 ambience.path = /usr/share/ambience/harbour-radelt
-INSTALLS += ambience
+ambienceimages.files = ambience/images/ambience_radelt.jpg
+ambienceimages.path = /usr/share/ambience/harbour-radelt/images
+INSTALLS += ambience ambienceimages
 
 CONFIG += sailfishapp_i18n

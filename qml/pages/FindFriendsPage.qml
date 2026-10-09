@@ -1,9 +1,10 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "../components"
 
 // Freund:innen suchen und anfragen. Der Server verlangt mindestens drei
 // Buchstaben; darunter fragt die App gar nicht erst.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     SilicaListView {
@@ -29,7 +30,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 visible: suche.text.length > 0 && suche.text.length < 3
                 text: qsTr("Bitte mindestens drei Buchstaben.")
             }
@@ -63,7 +64,7 @@ Page {
                 Label {
                     width: parent.width
                     truncationMode: TruncationMode.Fade
-                    color: eintrag.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    color: eintrag.highlighted ? palette.highlightColor : palette.primaryColor
                     // Die Suche liefert firstname/lastname klein geschrieben,
                     // anders als die Freundesliste -- am Server gemessen.
                     text: ((modelData.firstname ? modelData.firstname : "") + " "
@@ -72,7 +73,7 @@ Page {
                 Label {
                     width: parent.width
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
+                    color: palette.secondaryColor
                     text: {
                         var ort = modelData.city ? modelData.city : ""
                         var st = modelData.friendshipStatus
@@ -114,7 +115,7 @@ Page {
         width: parent.width - 2 * Theme.horizontalPageMargin
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.Wrap
-        color: Theme.highlightColor
+        color: palette.highlightColor
         visible: false
         onVisibleChanged: if (visible) ausblenden.restart()
         Timer { id: ausblenden; interval: 3000; onTriggered: anfrage.visible = false }

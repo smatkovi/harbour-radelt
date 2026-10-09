@@ -5,7 +5,7 @@ import "../components"
 // Die Übersicht: was das Jahr bisher gebracht hat, und der Balken je Monat.
 // Die Zahlen kommen vom Server (Jahresstatistik), nicht aus den lokalen
 // Fahrten -- hier steht, was das Konto zählt.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     onStatusChanged: if (status === PageStatus.Active) Api.refresh()
@@ -108,7 +108,7 @@ Page {
                                 anchors.bottom: parent.bottom
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 font.pixelSize: Theme.fontSizeTiny
-                                color: Theme.secondaryColor
+                                color: palette.secondaryColor
                                 // "2026-03-01" -> "3"
                                 text: modelData.month
                                       ? parseInt(modelData.month.split("-")[1], 10) : ""
@@ -123,7 +123,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 visible: !Api.loggedIn
                 text: qsTr("Nicht angemeldet — hier stehen die Zahlen deines Kontos.")
             }

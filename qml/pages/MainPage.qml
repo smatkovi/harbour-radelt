@@ -2,7 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import "../components"
 
-Page {
+ThemedPage {
     id: page
 
     allowedOrientations: Orientation.All
@@ -103,12 +103,12 @@ Page {
                     width: parent.width
                     text: title.length > 0 ? title : Format.dayAndTime(start)
                     truncationMode: TruncationMode.Fade
-                    color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    color: item.highlighted ? palette.highlightColor : palette.primaryColor
                 }
                 Label {
                     width: parent.width
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
+                    color: item.highlighted ? palette.secondaryHighlightColor : palette.secondaryColor
                     text: Format.kilometres(distance) + " km · "
                           + Format.duration(movingSeconds > 0 ? movingSeconds : totalSeconds)
                           + (manual ? " · " + qsTr("eingetragen") : "")

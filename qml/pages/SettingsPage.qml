@@ -1,7 +1,8 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "../components"
 
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     SilicaFlickable {
@@ -13,6 +14,35 @@ Page {
             width: parent.width
 
             PageHeader { title: qsTr("Einstellungen") }
+
+            ComboBox {
+                property bool bereit: false
+                readonly property var werte: [2, 1, 0]
+                label: qsTr("Farbschema")
+                currentIndex: werte.indexOf(Settings.colorTheme) >= 0
+                              ? werte.indexOf(Settings.colorTheme) : 0
+                menu: ContextMenu {
+                    MenuItem { text: qsTr("Rot auf schwarzem Grund") }
+                    MenuItem { text: qsTr("Rot auf hellem Grund") }
+                    MenuItem { text: qsTr("Ambience (Systemfarben)") }
+                }
+                Component.onCompleted: bereit = true
+                onCurrentIndexChanged: {
+                    if (bereit && currentIndex >= 0)
+                        Settings.colorTheme = werte[currentIndex]
+                }
+            }
+
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeExtraSmall
+                color: palette.secondaryColor
+                text: qsTr("Schwarz heißt hier wirklich #000000 — auf dem OLED bleiben "
+                           + "die Pixel aus. Dazu gibt es ein eigenes Ambiente „Radelt“ "
+                           + "in den Systemeinstellungen, das das ganze Gerät einfärbt.")
+            }
 
             TextSwitch {
                 text: qsTr("Fahrten gleich übertragen")

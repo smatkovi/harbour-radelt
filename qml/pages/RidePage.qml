@@ -2,7 +2,7 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import "../components"
 
-Page {
+ThemedPage {
     id: page
 
     property string rideId
@@ -80,7 +80,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 visible: page.ride.note.length > 0
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 text: page.ride.note
             }
 
@@ -89,7 +89,7 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 wrapMode: Text.Wrap
                 font.pixelSize: Theme.fontSizeExtraSmall
-                color: Theme.secondaryColor
+                color: palette.secondaryColor
                 visible: !page.ride.manual
                 text: qsTr("Die Strecke liegt als GPX unter %1").arg(Rides.gpxPath(page.rideId))
             }

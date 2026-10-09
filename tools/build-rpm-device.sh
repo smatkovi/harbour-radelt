@@ -91,6 +91,7 @@ cp -a $STAGE/. %{buildroot}/
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+%{_datadir}/ambience/%{name}
 SPEC_END
 
 rpmbuild -bb "$SPEC" --define "_topdir $BUILD/rpm" --define "_rpmdir $BUILD/rpm"

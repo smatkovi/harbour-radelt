@@ -1,11 +1,12 @@
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import "../components"
 
 // Die Räder des Kontos. Die Plattform führt genau ein Hauptrad, auf das
 // jede Fahrt fällt, die kein eigenes nennt; ein Rad mit Fahrten lässt sich
 // nicht löschen, nur stilllegen -- beides sagt die Antwort des Servers, und
 // die Knöpfe richten sich danach.
-Page {
+ThemedPage {
     allowedOrientations: Orientation.All
 
     onStatusChanged: if (status === PageStatus.Active) Api.refresh()
@@ -37,13 +38,13 @@ Page {
                 Label {
                     width: parent.width
                     truncationMode: TruncationMode.Fade
-                    color: item.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    color: item.highlighted ? palette.highlightColor : palette.primaryColor
                     text: modelData.name ? modelData.name : qsTr("Rad")
                 }
                 Label {
                     width: parent.width
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
+                    color: palette.secondaryColor
                     text: (modelData.isMain ? qsTr("Hauptrad") : qsTr("Weiteres Rad"))
                           + (modelData.isEbike ? " · " + qsTr("E-Bike") : "")
                           + (modelData.isActive === false ? " · " + qsTr("stillgelegt") : "")
