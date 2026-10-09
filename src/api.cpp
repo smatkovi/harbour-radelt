@@ -158,6 +158,9 @@ void Api::logout()
     m_months.clear();
     m_timeline.clear();
     m_trophies.clear();
+    m_news.clear();
+    m_sponsors.clear();
+    m_notifications.clear();
     m_openChallenges.clear();
     m_myChallenges.clear();
     m_settings->setToken(QString());
@@ -276,6 +279,59 @@ void Api::addCyclingDay(qlonglong challengeId, const QDate &day)
     body.insert("dates", tage);
     body.insert("countDay", true);
     send(CyclingDayRequest, "PUT", "/journeylog/save", body);
+}
+
+void Api::updatePerson(const QVariantMap &felder)
+{
+    if (!loggedIn())
+        return;
+    // Der Dienst prüft email, firstName und lastName und antwortet bei
+    // Unsinn mit HTTP 409 <feld>_validation_failed. nickname prüft er
+    // **nicht** -- was dort hineingeht, steht danach wortwörtlich im
+    // Profil; deshalb filtert die App das Offensichtliche selbst.
+    QVariantMap body;
+    for (QVariantMap::const_iterator it = felder.constBegin();
+         it != felder.constEnd(); ++it) {
+        if (it.value().type() == QVariant::List || it.value().type() == QVariant::Map)
+            continue;
+        body.insert(it.key(), it.value());
+    }
+    send(PersonUpdateRequest, "PUT", "/person/update", body);
+}
+
+void Api::setVisibleForFriends(bool sichtbar)
+{
+    QVariantMap felder;
+    felder.insert("visibleForFriends", sichtbar);
+    updatePerson(felder);
+}
+
+void Api::updateRemoteRide(qlonglong remoteId, const QVariantMap &felder)
+{
+    if (!loggedIn() || remoteId <= 0)
+        return;
+    // rideId ist Pflicht und heißt genau so -- mit "id" stürzt die Route ab.
+    QVariantMap body = felder;
+    body.insert("rideId", remoteId);
+    send(RideUpdateRequest, "POST", "/ride/update", body);
+}
+
+void Api::deleteRemoteRide(qlonglong remoteId)
+{
+    if (!loggedIn() || remoteId <= 0)
+        return;
+    QVariantMap body;
+    body.insert("rideId", remoteId);
+    send(RideDeleteRequest, "DELETE", "/ride/delete", body);
+}
+
+void Api::fetchNews()
+{
+    if (!loggedIn())
+        return;
+    send(NewsRequest, "GET", "/newsevents", QVariantMap());
+    send(SponsorsRequest, "GET", "/sponsors", QVariantMap());
+    send(NotificationsRequest, "GET", "/notifications", QVariantMap());
 }
 
 void Api::searchFriends(const QString &text)
@@ -610,6 +666,37 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         // trotzdem "getan".
         fetchChallenges();
         send(DashboardRequest, "GET", "/dashboard", QVariantMap());
+        break;
+    case PersonUpdateRequest:
+        m_person = map.contains("person") ? map.value("person").toMap() : map;
+        emit personChanged();
+        break;
+    case RideUpdateRequest:
+    case RideDeleteRequest:
+        // Nach einer Änderung am Server den Verlauf neu lesen: eine 500
+        // heißt bei diesen Routen nicht, dass nichts passiert ist.
+        fetchTimeline();
+        send(DashboardRequest, "GET", "/dashboard", QVariantMap());
+        break;
+    case NewsRequest:
+        m_news = data.toList();
+        if (m_news.isEmpty())
+            m_news = map.value("newsEvents").toList();
+        if (m_news.isEmpty())
+            m_news = map.value("news").toList();
+        emit newsChanged();
+        break;
+    case SponsorsRequest:
+        m_sponsors = data.toList();
+        if (m_sponsors.isEmpty())
+            m_sponsors = map.value("sponsors").toList();
+        emit newsChanged();
+        break;
+    case NotificationsRequest:
+        m_notifications = data.toList();
+        if (m_notifications.isEmpty())
+            m_notifications = map.value("notifications").toList();
+        emit newsChanged();
         break;
     case SearchRequest:
         // Die Suche liefert people[] mit kleingeschriebenen Feldern

@@ -41,6 +41,10 @@ class Api : public QObject
     // Aktionen: was man mitmachen kann und was man schon mitmacht.
     Q_PROPERTY(QVariantList openChallenges READ openChallenges NOTIFY challengesChanged)
     Q_PROPERTY(QVariantList myChallenges READ myChallenges NOTIFY challengesChanged)
+    Q_PROPERTY(QVariantMap person READ person NOTIFY personChanged)
+    Q_PROPERTY(QVariantList news READ news NOTIFY newsChanged)
+    Q_PROPERTY(QVariantList sponsors READ sponsors NOTIFY newsChanged)
+    Q_PROPERTY(QVariantList notifications READ notifications NOTIFY newsChanged)
     // Die Jahreszahlen der Übersicht, flach und schon umgerechnet.
     Q_PROPERTY(QVariantMap yearStats READ yearStats NOTIFY dashboardChanged)
     Q_PROPERTY(QVariantList months READ months NOTIFY dashboardChanged)
@@ -68,6 +72,10 @@ public:
     QVariantList trophies() const { return m_trophies; }
     QVariantList openChallenges() const { return m_openChallenges; }
     QVariantList myChallenges() const { return m_myChallenges; }
+    QVariantMap person() const { return m_person; }
+    QVariantList news() const { return m_news; }
+    QVariantList sponsors() const { return m_sponsors; }
+    QVariantList notifications() const { return m_notifications; }
 
 public slots:
     void login(const QString &user, const QString &password);
@@ -104,6 +112,21 @@ public slots:
     // Im Binär heißt das SaveRzaRequest (Radelt zur Arbeit).
     Q_INVOKABLE void addCyclingDay(qlonglong challengeId, const QDate &day);
 
+    // Profil. Ein leerer Körper ist beim Dienst ein Leerlauf und gibt das
+    // volle Profil zurück -- deshalb taugt dieselbe Route zum Abrufen.
+    // Geprüft werden email, firstName und lastName (HTTP 409); nickname
+    // nimmt der Dienst ungeprüft an.
+    Q_INVOKABLE void updatePerson(const QVariantMap &felder);
+    // Ohne diesen Schalter findet die Freundessuche einen nicht.
+    Q_INVOKABLE void setVisibleForFriends(bool sichtbar);
+
+    // Fahrten am Server ändern und löschen (Pflichtfeld rideId).
+    Q_INVOKABLE void updateRemoteRide(qlonglong remoteId, const QVariantMap &felder);
+    Q_INVOKABLE void deleteRemoteRide(qlonglong remoteId);
+
+    // Nur lesen: Neuigkeiten, Sponsoren, Benachrichtigungen.
+    Q_INVOKABLE void fetchNews();
+
     // Freund:innen. Die Suche braucht mindestens drei Buchstaben -- so
     // hält es die Original-App, und der Server findet mit weniger ohnehin
     // zu viel. Die Aktionen nehmen alle die Kennung der anderen Person
@@ -124,6 +147,7 @@ signals:
     void searchChanged();
     void timelineChanged();
     void challengesChanged();
+    void newsChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
     // The server says this app is too old for it; the pages show a hint.
@@ -139,7 +163,9 @@ private:
                 BikeDeleteRequest, FriendsRequest, OrganisationsRequest,
                 ShareUrlRequest, TimelineRequest, TrophiesRequest,
                 SearchRequest, FriendActionRequest, ChallengesRequest,
-                ChallengeActionRequest, CyclingDayRequest };
+                ChallengeActionRequest, CyclingDayRequest, PersonUpdateRequest,
+                RideUpdateRequest, RideDeleteRequest, NewsRequest,
+                SponsorsRequest, NotificationsRequest };
 
     struct Pending
     {
@@ -173,6 +199,9 @@ private:
     QVariantList m_months;
     QVariantList m_timeline;
     QVariantList m_trophies;
+    QVariantList m_news;
+    QVariantList m_sponsors;
+    QVariantList m_notifications;
     QVariantList m_openChallenges;
     QVariantList m_myChallenges;
     QVariantList m_found;

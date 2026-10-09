@@ -23,6 +23,10 @@ ThemedPage {
             MenuItem {
                 text: qsTr("Löschen")
                 onClicked: {
+                    // Was schon übertragen ist, auch dort wegnehmen --
+                    // sonst zählt es auf radelt.at weiter.
+                    if (page.ride.uploaded && page.ride.remoteId > 0)
+                        Api.deleteRemoteRide(page.ride.remoteId)
                     Rides.remove(page.rideId)
                     pageStack.pop()
                 }

@@ -150,6 +150,14 @@ Page {
                 onClicked: pageStack.push(Qt.resolvedUrl("BikesPage.qml"))
             }
             MenuItem {
+                text: qsTr("Mein Profil")
+                onClicked: pageStack.push(Qt.resolvedUrl("ProfilePage.qml"))
+            }
+            MenuItem {
+                text: qsTr("Neuigkeiten")
+                onClicked: pageStack.push(Qt.resolvedUrl("NewsPage.qml"))
+            }
+            MenuItem {
                 text: qsTr("Einstellungen")
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
             }

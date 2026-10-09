@@ -77,6 +77,9 @@ Page {
         acceptButtonText: qsTr("Löschen")
         rejectButtonText: qsTr("Behalten")
         onAccepted: {
+            // Was schon uebertragen ist, auch dort wegnehmen.
+            if (page.ride.uploaded && page.ride.remoteId > 0)
+                Api.deleteRemoteRide(page.ride.remoteId)
             Rides.remove(page.rideId)
             pageStack.pop()
         }
