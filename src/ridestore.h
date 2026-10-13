@@ -19,7 +19,7 @@ class Recorder;
 struct Ride
 {
     Ride() : distance(0), ascent(0), movingSeconds(0), totalSeconds(0),
-             uploaded(false), remoteId(0), manual(false) {}
+             uploaded(false), remoteId(0), manual(false), trackState(0) {}
 
     QString id;                 // "2026-10-08T173012" -- also the file name
     QDateTime start;
@@ -33,6 +33,12 @@ struct Ride
     bool uploaded;
     qlonglong remoteId;         // the server's id once it took the ride
     bool manual;                // typed in rather than recorded
+    // Die Spur geht in einem **zweiten** Schritt hoch (/ride/track/save),
+    // und die Plattform hat keine Leseroute dafuer -- am Server
+    // nachgesehen, es gibt keine. Ob sie angekommen ist, weiss also nur
+    // die App, und nur, wenn sie es sich merkt. 0 = unbekannt,
+    // 1 = bestaetigt, 2 = gescheitert.
+    int trackState;
 
     QVariantMap toMap() const;
     static Ride fromMap(const QVariantMap &map);
@@ -61,7 +67,8 @@ public:
         BikeRole,
         UploadedRole,
         RemoteIdRole,
-        ManualRole
+        ManualRole,
+        TrackStateRole
     };
 
     explicit RideStore(QObject *parent = 0);
@@ -100,6 +107,8 @@ public:
     Q_INVOKABLE bool loadTrack(const QString &id, Track *track) const;
 
     void markUploaded(const QString &id, qlonglong remoteId);
+    // 1 = die Spur ist bestaetigt, 2 = sie ist nicht angekommen.
+    void markTrackState(const QString &id, int state);
     QList<Ride> pending() const;
 
     QString directory() const { return m_directory; }

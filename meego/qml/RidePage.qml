@@ -41,6 +41,17 @@ Page {
             value: page.ride.uploaded ? qsTr("ja") : qsTr("nein")
         }
 
+        Detail {
+            // Die Spur geht in einem zweiten Schritt hoch, und die
+            // Plattform hat keine Leseroute dafuer -- was die App sich
+            // nicht merkt, ist fuer immer unbekannt.
+            label: qsTr("Spur")
+            visible: page.ride.uploaded
+            value: page.ride.trackState === 1 ? qsTr("übertragen")
+                 : page.ride.trackState === 2 ? qsTr("nicht angekommen")
+                 : qsTr("unbekannt")
+        }
+
         Label {
             x: 16
             width: parent.width - 32
@@ -69,6 +80,7 @@ Page {
             // durch und die Spur nicht, holt das sonst nichts mehr nach.
             width: 200
             visible: page.ride.uploaded && Api.loggedIn
+                     && page.ride.trackState !== 1
             text: qsTr("Spur nachsenden")
             onClicked: Api.uploadTrack(page.rideId)
         }

@@ -54,6 +54,7 @@ QVariantMap Ride::toMap() const
     map.insert("uploaded", uploaded);
     map.insert("remoteId", remoteId);
     map.insert("manual", manual);
+    map.insert("trackState", trackState);
     return map;
 }
 
@@ -73,6 +74,7 @@ Ride Ride::fromMap(const QVariantMap &map)
     ride.uploaded = map.value("uploaded").toBool();
     ride.remoteId = map.value("remoteId").toLongLong();
     ride.manual = map.value("manual").toBool();
+    ride.trackState = map.value("trackState").toInt();
     return ride;
 }
 
@@ -95,6 +97,7 @@ RideStore::RideStore(QObject *parent) :
     roles.insert(UploadedRole, "uploaded");
     roles.insert(RemoteIdRole, "remoteId");
     roles.insert(ManualRole, "manual");
+    roles.insert(TrackStateRole, "trackState");
     setRoleNames(roles);
 #endif
     load();
@@ -116,6 +119,7 @@ QHash<int, QByteArray> RideStore::roleNames() const
     roles.insert(UploadedRole, "uploaded");
     roles.insert(RemoteIdRole, "remoteId");
     roles.insert(ManualRole, "manual");
+    roles.insert(TrackStateRole, "trackState");
     return roles;
 }
 #endif
@@ -143,6 +147,7 @@ QVariant RideStore::data(const QModelIndex &index, int role) const
     case UploadedRole: return ride.uploaded;
     case RemoteIdRole: return ride.remoteId;
     case ManualRole: return ride.manual;
+    case TrackStateRole: return ride.trackState;
     default: return QVariant();
     }
 }
@@ -350,6 +355,17 @@ bool RideStore::loadTrack(const QString &id, Track *track) const
     if (!file.open(QIODevice::ReadOnly))
         return false;
     return track->fromGpx(file.readAll());
+}
+
+void RideStore::markTrackState(const QString &id, int state)
+{
+    const int row = indexOf(id);
+    if (row < 0)
+        return;
+    m_rides[row].trackState = state;
+    write(m_rides.at(row));
+    const QModelIndex changed = index(row, 0);
+    emit dataChanged(changed, changed);
 }
 
 void RideStore::markUploaded(const QString &id, qlonglong remoteId)

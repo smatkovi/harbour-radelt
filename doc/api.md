@@ -750,6 +750,21 @@ gemeldet, und es gibt „Spur nachsenden" für eine Fahrt, die schon oben ist.
   description, category, altitude, externalId, externalSource}`.
   `/timeline` gibt es nicht (404).
 
+### Es gibt keine Leseroute für Spuren  `[GEMESSEN]`
+
+Ob eine Spur angekommen ist, kann **niemand** nachträglich feststellen:
+`/ride/track`, `/ride?rideId=`, `/ride/<id>` und `/ride/track/<id>` sind alle
+404, und im Binär steht zu `ride` nur `save`, `update`, `delete`, `sync` und
+`track/save` — die Original-App liest Spuren nie zurück. Auch die Webseite
+hilft nicht: `dashboard.radelt.at` nimmt den App-Keks `fw_login` nicht an
+(302 auf `/login`).
+
+**Darum merkt die App es sich selbst** (`Ride::trackState`: unbekannt /
+bestätigt / nicht angekommen) und zeigt es an der Fahrt. Was sie nicht
+festhält, ist für immer unbekannt. Und darum schreibt sie seit 0.8.4 jede
+Anfrage mit ihrem Ergebnis in `<Datenordner>/verlauf.log` — auf beiden
+Geräten gibt es keine Konsole, wenn die App vom Symbol aus startet.
+
 ### Noch nicht gemessen
 
 Das Zeitformat der Punkte. Im Binär steht dafür keine Formatzeichenkette, und

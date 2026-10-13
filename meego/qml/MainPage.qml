@@ -75,7 +75,8 @@ Page {
                     elide: Text.ElideRight
                     text: Format.kilometres(distance) + " km · "
                           + Format.duration(movingSeconds > 0 ? movingSeconds : totalSeconds)
-                          + (uploaded ? "" : " · " + qsTr("nicht übertragen"))
+                          + (uploaded ? (trackState === 2 ? " · " + qsTr("Spur fehlt") : "")
+                                      : " · " + qsTr("nicht übertragen"))
                 }
             }
 

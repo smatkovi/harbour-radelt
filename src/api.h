@@ -297,6 +297,12 @@ private:
                  const QByteArray &body, const QString &rideId,
                  qlonglong challengeId);
     void setError(const QString &text);
+    // Jede Anfrage mit ihrem Ergebnis in eine Datei, damit sich hinterher
+    // nachlesen laesst, was passiert ist. Auf beiden Geraeten gibt es
+    // keine Konsole, wenn die App vom Symbol aus startet -- und ob eine
+    // Spur angekommen ist, kann der Dienst nicht sagen (keine Leseroute).
+    // Ohne Token, ohne Koerper, ohne persoenliche Werte.
+    void notiere(const QString &zeile);
     void setToken(const QString &token);
     void handleEnvelope(const Pending &pending, const QVariantMap &envelope);
     // Baut den Anmelde-Koerper und schickt ihn. Getrennt von login(),

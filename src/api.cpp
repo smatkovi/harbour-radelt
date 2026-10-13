@@ -7,7 +7,15 @@
 #include "settings.h"
 #include "track.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
+#if QT_VERSION >= 0x050000
+#include <QStandardPaths>
+#else
+#include <QDesktopServices>
+#endif
+#include <QDir>
+#include <QFile>
 #include <QDateTime>
 #include <QDebug>
 #include <QLocale>
@@ -109,6 +117,48 @@ void Api::setToken(const QString &token)
     emit loggedInChanged();
 }
 
+// Nur der Name der Anfrageart -- keine Kennungen, keine Werte.
+static QString kindName(int kind)
+{
+    static const char *namen[] = {
+        "Login", "Person", "Bikes", "Dashboard", "RideSave", "TrackSave",
+        "BikeSave", "BikeDelete", "Friends", "Organisations", "ShareUrl",
+        "Timeline", "Trophies", "Search", "FriendAction", "Challenges",
+        "ChallengeAction", "CyclingDay", "PersonUpdate", "RideUpdate",
+        "RideDelete", "News", "Sponsors", "Notifications", "Goals",
+        "GoalAction", "JourneyLogs", "JourneyLogAction", "Pois",
+        "PoiCollect", "PoiFound", "OrganisationSearch", "OrganisationSave" };
+    const int anzahl = int(sizeof(namen) / sizeof(namen[0]));
+    return kind >= 0 && kind < anzahl ? QLatin1String(namen[kind])
+                                      : QString::number(kind);
+}
+
+void Api::notiere(const QString &zeile)
+{
+#if QT_VERSION >= 0x050000
+    QString ordner = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+#else
+    QString ordner = QDesktopServices::storageLocation(QDesktopServices::DataLocation);
+#endif
+    if (ordner.isEmpty())
+        return;
+    QDir().mkpath(ordner);
+    const QString pfad = ordner + "/verlauf.log";
+
+    // Mitlaufend kuerzen: die Datei soll nie zum Problem werden.
+    QFile datei(pfad);
+    if (datei.size() > 64 * 1024) {
+        QFile::remove(pfad + ".alt");
+        QFile::rename(pfad, pfad + ".alt");
+    }
+    if (!datei.open(QIODevice::Append | QIODevice::WriteOnly | QIODevice::Text))
+        return;
+    const QString stempel =
+        QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    datei.write((stempel + " " + zeile + "\n").toUtf8());
+    datei.close();
+}
+
 int Api::send(Kind kind, const QString &verb, const QString &path,
               const QVariantMap &body, const QString &rideId,
               qlonglong challengeId)
@@ -147,6 +197,7 @@ int Api::sendBody(Kind kind, const QString &verb, const QString &path,
     ++m_open;
     emit busyChanged();
 
+    notiere(QString("-> %1 %2").arg(verb, path.section('?', 0, 0)));
     m_http->request(tag, verb, QString::fromLatin1(BaseUrl) + path, body, headers);
     return tag;
 }
@@ -890,10 +941,19 @@ void Api::replyFinished(int tag, int status, const QByteArray &body, const QStri
 
     if (!error.isEmpty()) {
         setError(error);
-        if (pending.kind == RideSaveRequest || pending.kind == TrackSaveRequest)
+        if (pending.kind == RideSaveRequest)
             emit rideUploaded(pending.rideId, false, error);
+        if (pending.kind == TrackSaveRequest) {
+            m_rides->markTrackState(pending.rideId, 2);
+            emit trackUploaded(pending.rideId, false, error);
+        }
         return;
     }
+
+    notiere(QString("<- %1 %2%3")
+            .arg(status)
+            .arg(kindName(pending.kind))
+            .arg(error.isEmpty() ? QString() : " | " + error));
 
     if (pending.kind == BikesRequest)
         m_bikesPending = false;
@@ -1001,6 +1061,7 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
             // Die Fahrt ist oben -- nur ihre Spur nicht. Das muss anders
             // klingen als ein gescheiterter Upload, sonst sieht es aus,
             // als waere nichts passiert, und man schickt sie doppelt.
+            m_rides->markTrackState(pending.rideId, 2);
             emit trackUploaded(pending.rideId, false, message);
         }
         return;
@@ -1385,6 +1446,10 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         break;
     }
     case TrackSaveRequest:
+        // Festhalten, dass sie angekommen ist: der Dienst hat keine
+        // Leseroute fuer Spuren, also laesst sich das spaeter auf keinem
+        // anderen Weg mehr feststellen.
+        m_rides->markTrackState(pending.rideId, 1);
         emit trackUploaded(pending.rideId, true, envelope.value("message").toString());
         // The ride already counts; the track is the picture that goes with
         // it, so a failure here must not undo the upload.

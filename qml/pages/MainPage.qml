@@ -140,7 +140,8 @@ ThemedPage {
                     text: Format.kilometres(distance) + " km · "
                           + Format.duration(movingSeconds > 0 ? movingSeconds : totalSeconds)
                           + (manual ? " · " + qsTr("eingetragen") : "")
-                          + (uploaded ? "" : " · " + qsTr("nicht übertragen"))
+                          + (uploaded ? (trackState === 2 ? " · " + qsTr("Spur fehlt") : "")
+                                      : " · " + qsTr("nicht übertragen"))
                 }
             }
 
@@ -176,4 +177,6 @@ ThemedPage {
 
         VerticalScrollDecorator { }
     }
+
+    Hinweis { }
 }

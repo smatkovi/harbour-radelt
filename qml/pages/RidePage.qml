@@ -25,6 +25,7 @@ ThemedPage {
                 // Fahrt durch und die Spur nicht, holt das sonst nichts
                 // mehr nach.
                 visible: page.ride.uploaded && Api.loggedIn
+                         && page.ride.trackState !== 1
                 text: qsTr("Spur nachsenden")
                 onClicked: Api.uploadTrack(page.rideId)
             }
@@ -86,6 +87,16 @@ ThemedPage {
                 label: qsTr("Übertragen")
                 value: page.ride.uploaded ? qsTr("ja") : qsTr("nein")
             }
+            DetailItem {
+                // Die Spur geht in einem zweiten Schritt hoch, und die
+                // Plattform hat keine Leseroute dafür -- was die App sich
+                // nicht merkt, ist für immer unbekannt.
+                label: qsTr("Spur")
+                visible: page.ride.uploaded
+                value: page.ride.trackState === 1 ? qsTr("übertragen")
+                     : page.ride.trackState === 2 ? qsTr("nicht angekommen")
+                     : qsTr("unbekannt")
+            }
 
             Label {
                 x: Theme.horizontalPageMargin
@@ -112,4 +123,6 @@ ThemedPage {
         target: Rides
         onCountChanged: page.ride = Rides.ride(page.rideId)
     }
+
+    Hinweis { }
 }

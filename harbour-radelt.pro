@@ -38,6 +38,7 @@ DISTFILES += \
     qml/cover/CoverPage.qml \
     qml/components/BigNumber.qml \
     qml/components/ThemedPage.qml \
+    qml/components/Hinweis.qml \
     qml/pages/MainPage.qml \
     qml/pages/RecordPage.qml \
     qml/pages/SaveDialog.qml \

@@ -91,12 +91,14 @@ public:
         roles.insert(Qt::UserRole + 10, "uploaded");
         roles.insert(Qt::UserRole + 11, "remoteId");
         roles.insert(Qt::UserRole + 12, "manual");
+        roles.insert(Qt::UserRole + 13, "trackState");
         setRoleNames(roles);
     }
     int count() const { return 0; }
     double number() const { return 0; }
     int rowCount(const QModelIndex & = QModelIndex()) const { return 0; }
     QVariant data(const QModelIndex &, int) const { return QVariant(); }
+    Q_INVOKABLE void markTrackState(const QString &, int) {}
     Q_INVOKABLE QVariantMap ride(const QString &) const
     {
         // A ride the pages can read every field off, so a typo in a
@@ -114,6 +116,7 @@ public:
         map.insert("uploaded", false);
         map.insert("remoteId", 0);
         map.insert("manual", false);
+        map.insert("trackState", 0);
         return map;
     }
     Q_INVOKABLE bool remove(const QString &) { return true; }

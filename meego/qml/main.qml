@@ -26,17 +26,18 @@ PageStackWindow {
     Connections {
         target: Api
         onRideUploaded: {
-            banner.text = ok ? qsTr("Fahrt übertragen")
-                             : qsTr("Nicht übertragen: %1").arg(message)
+            banner.text = ok ? qsTr("Fahrt übertragen – jetzt kommt die Spur")
+                             : qsTr("Fahrt nicht übertragen: %1").arg(message)
             banner.show()
         }
         // Die Fahrt zaehlt schon, wenn nur die Spur scheitert -- das muss
         // anders klingen, sonst schickt man sie doppelt.
+        // Auch den Erfolg melden: sonst tippt man "Spur nachsenden" und
+        // sieht nicht, ob etwas passiert ist.
         onTrackUploaded: {
-            if (!ok) {
-                banner.text = qsTr("Fahrt ist oben, die Spur nicht: %1").arg(message)
-                banner.show()
-            }
+            banner.text = ok ? qsTr("Spur übertragen – die Fahrt ist vollständig oben")
+                             : qsTr("Fahrt ist oben, die Spur nicht: %1").arg(message)
+            banner.show()
         }
     }
 
