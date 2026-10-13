@@ -34,6 +34,8 @@ Label {
         onRideUploaded: hinweis.zeige(ok
             ? qsTr("Fahrt übertragen – jetzt kommt die Spur")
             : qsTr("Fahrt nicht übertragen: %1").arg(message))
+        // Zwei Schritte, zwei Meldungen: die Fahrt kann oben sein und die
+        // Spur fehlen.
         onTrackUploaded: hinweis.zeige(ok
             ? qsTr("Spur übertragen – die Fahrt ist vollständig oben")
             : qsTr("Fahrt ist oben, die Spur nicht: %1").arg(message))

@@ -999,6 +999,14 @@ void Api::replyFinished(int tag, int status, const QByteArray &body, const QStri
 void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
 {
     const bool ok = envelope.value("success").toBool();
+    // HTTP 200 heisst bei dieser Plattform nichts: eine Absage kommt als
+    // 200 mit success:false. Deshalb gehoert ins Protokoll, was die
+    // Huelle sagt -- sonst muss man den Erfolg woanders nachschlagen.
+    notiere(QString("   %1 %2%3")
+            .arg(ok ? "ok" : "abgelehnt")
+            .arg(kindName(pending.kind))
+            .arg(ok ? QString()
+                    : " | " + envelope.value("error").toString()));
     if (!ok) {
         QString message = envelope.value("message").toString();
         const QVariant problem = envelope.value("error");
