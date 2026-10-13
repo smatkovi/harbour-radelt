@@ -153,6 +153,14 @@ ThemedPage {
                     onClicked: Api.uploadRide(rideId)
                 }
                 MenuItem {
+                    // Fahrt und Spur gehen in zwei Schritten hoch. Ist die
+                    // Fahrt oben und die Spur nicht durchgekommen, holt das
+                    // sonst nichts mehr nach.
+                    visible: uploaded && Api.loggedIn
+                    text: qsTr("Spur nachsenden")
+                    onClicked: Api.uploadTrack(rideId)
+                }
+                MenuItem {
                     text: qsTr("Löschen")
                     onClicked: item.remorseAction(qsTr("Fahrt löschen"),
                                                   function() { Rides.remove(rideId) })

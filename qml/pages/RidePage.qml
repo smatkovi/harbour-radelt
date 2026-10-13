@@ -21,6 +21,14 @@ ThemedPage {
                 onClicked: Api.uploadRide(page.rideId)
             }
             MenuItem {
+                // Fahrt und Spur gehen in zwei Schritten hoch. Kam die
+                // Fahrt durch und die Spur nicht, holt das sonst nichts
+                // mehr nach.
+                visible: page.ride.uploaded && Api.loggedIn
+                text: qsTr("Spur nachsenden")
+                onClicked: Api.uploadTrack(page.rideId)
+            }
+            MenuItem {
                 text: qsTr("Löschen")
                 onClicked: {
                     // Was schon übertragen ist, auch dort wegnehmen --

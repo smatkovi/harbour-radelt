@@ -64,6 +64,15 @@ Page {
             onClicked: Api.uploadRide(page.rideId)
         }
 
+        Button {
+            // Fahrt und Spur gehen in zwei Schritten hoch. Kam die Fahrt
+            // durch und die Spur nicht, holt das sonst nichts mehr nach.
+            width: 200
+            visible: page.ride.uploaded && Api.loggedIn
+            text: qsTr("Spur nachsenden")
+            onClicked: Api.uploadTrack(page.rideId)
+        }
+
         ToolIcon {
             iconId: "toolbar-delete"
             onClicked: removeQuery.open()

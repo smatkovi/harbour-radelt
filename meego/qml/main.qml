@@ -30,6 +30,14 @@ PageStackWindow {
                              : qsTr("Nicht übertragen: %1").arg(message)
             banner.show()
         }
+        // Die Fahrt zaehlt schon, wenn nur die Spur scheitert -- das muss
+        // anders klingen, sonst schickt man sie doppelt.
+        onTrackUploaded: {
+            if (!ok) {
+                banner.text = qsTr("Fahrt ist oben, die Spur nicht: %1").arg(message)
+                banner.show()
+            }
+        }
     }
 
     function showMessage(text) {

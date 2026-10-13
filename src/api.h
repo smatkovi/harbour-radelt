@@ -212,6 +212,12 @@ public slots:
     // Ohne diesen Schalter findet die Freundessuche einen nicht.
     Q_INVOKABLE void setVisibleForFriends(bool sichtbar);
 
+    // Die Spur einer schon uebertragenen Fahrt nachsenden. Gebraucht,
+    // weil /ride/save und /ride/track/save zwei Schritte sind: die Fahrt
+    // kann oben sein, die Spur fehlen -- und ohne diesen Weg holt das
+    // nichts mehr nach.
+    Q_INVOKABLE void uploadTrack(const QString &rideId);
+
     // Fahrten am Server ändern und löschen (Pflichtfeld rideId).
     Q_INVOKABLE void updateRemoteRide(qlonglong remoteId, const QVariantMap &felder);
     Q_INVOKABLE void deleteRemoteRide(qlonglong remoteId);
@@ -246,6 +252,9 @@ signals:
     void goalsChanged();
     void dashboardChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
+    // Getrennt von rideUploaded: die Fahrt kann oben sein und die Spur
+    // fehlen. Beides als dasselbe zu melden fuehrt zu Doppel-Uploads.
+    void trackUploaded(const QString &rideId, bool ok, const QString &message);
     // The server says this app is too old for it; the pages show a hint.
     void appTooOld(const QString &minimumVersion);
 
@@ -278,6 +287,15 @@ private:
     int send(Kind kind, const QString &verb, const QString &path,
              const QVariantMap &body, const QString &rideId = QString(),
              qlonglong challengeId = 0);
+    // Die Spur ist der eine Fall, in dem der Koerper **keine** Huelle ist,
+    // sondern die blanke Liste der Punkte. Am Server nachgemessen: ein
+    // Objekt mit irgendeinem Schluessel bringt /ride/track/save zum
+    // Absturz, die blanke Liste nimmt es an (doc/api.md §15).
+    int sendList(Kind kind, const QString &verb, const QString &path,
+                 const QVariantList &body, const QString &rideId = QString());
+    int sendBody(Kind kind, const QString &verb, const QString &path,
+                 const QByteArray &body, const QString &rideId,
+                 qlonglong challengeId);
     void setError(const QString &text);
     void setToken(const QString &token);
     void handleEnvelope(const Pending &pending, const QVariantMap &envelope);
@@ -336,6 +354,8 @@ private:
     QString m_loginUser;
     QString m_loginPassword;
     bool m_loginRetried;
+    // Laeuft gerade ein /bikes, weil eine Fahrt darauf wartet?
+    bool m_bikesPending;
     int m_nextTag;
     int m_open;
 };

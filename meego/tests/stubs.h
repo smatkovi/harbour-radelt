@@ -203,6 +203,7 @@ public:
     Q_INVOKABLE void acceptFriend(qlonglong) {}
     Q_INVOKABLE void declineFriend(qlonglong) {}
     Q_INVOKABLE void removeFriend(qlonglong) {}
+    Q_INVOKABLE void uploadTrack(const QString &) {}
     Q_INVOKABLE void searchOrganisations(const QString &, const QString &) {}
     Q_INVOKABLE void setPreferredOrganisations(const QVariantList &) {}
     Q_INVOKABLE void addOrganisation(qlonglong) {}
@@ -237,6 +238,7 @@ signals:
     void journeyLogsChanged();
     void poisChanged();
     void rideUploaded(const QString &rideId, bool ok, const QString &message);
+    void trackUploaded(const QString &rideId, bool ok, const QString &message);
     void appTooOld(const QString &minimumVersion);
 };
 

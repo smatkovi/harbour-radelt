@@ -699,3 +699,60 @@ Eine Organisation kommt so:
 | `UNIVERSITY` | Universität | |
 
 Also nicht `COMPANY` raten — der naheliegende Name ist der falsche.
+
+## 15. Die GPS-Spur: der Körper ist die blanke Liste  `[GEMESSEN]`
+
+`PUT /api/v2/ride/track/save` nimmt **kein Objekt**, sondern die blanke Liste der
+Punkte. Am Server durchprobiert, ohne etwas zu schreiben:
+
+| Körper | Antwort |
+|---|---|
+| gar keiner | `200 {"success":true,"message":"ride_track_saved"}` |
+| `[]` | `200 ride_track_saved` |
+| `{}` | `200 ride_track_saved` |
+| `{"foo":1}` | **500** `{"message":"Server Error"}` |
+| `{"trackData":[]}` | **500** |
+| `{"trackData":[{…ein gültiger Punkt…}]}` | **500** |
+| `{"rideId":…}` | **500** |
+| `[{}]` | **500** |
+| POST statt PUT | 405, „Supported methods: PUT" |
+
+Dass **`{"foo":1}` genauso abstürzt wie ein gültiges `trackData`**, ist der
+Schlüssel: die Route läuft über die Nutzlast selbst und nimmt jeden Eintrag als
+Punkt. Deshalb kennt `SaveTrackRequest` im Binär auch **kein `rideId`** — die
+Felder sind nur `trackData` und darunter `latitude, longitude, speed, altitude,
+timestamp`, und der Dienst schickt als Körper `request.trackData`, also die
+Liste. Welche Fahrt gemeint ist, entscheidet er selbst; darum geht die Spur
+unmittelbar nach dem Anlegen hoch.
+
+**Das war der Fehler, den der Nutzer am 13.10.2026 als „Server Error" sah.**
+Die App schickte `{"rideId":…, "trackData":[…]}`. Und weil `/ride/save` die
+Fahrt **vorher** schon anlegt und als übertragen markiert, war die Fahrt oben
+(13,5 km im Konto nachgewiesen) und nur die Spur fehlte — die Meldung sah aber
+aus, als wäre nichts passiert. Seit 0.8.3 sind beide Schritte getrennt
+gemeldet, und es gibt „Spur nachsenden" für eine Fahrt, die schon oben ist.
+
+### Was dabei sonst noch gemessen wurde
+
+* **Falsches Rad ist keine 500:** `bikeId` auf eine fremde Kennung gibt
+  `200 {"success":false,"message":"Das Rad wurde nicht gefunden.","error":"save_failed"}`
+  — und schreibt nichts. Nur ein **fehlendes** `bikeId` bringt `/ride/save` zum
+  Absturz. Die Rad-Auflösung läuft vor allem anderen, deshalb lässt sich hinter
+  ihr ohne echten Schreibvorgang nichts prüfen.
+* **`tacho` und `category` sind nullbar.** `CreateTrackingRequest` hat beide
+  (`tacho` als Zeichenkette, im Original „0.00"; `category` eines von `DAILY`,
+  `LEISURE`, `WORK`, `OTHER`), aber `GET /timelineevents` zeigt die
+  erfolgreich angelegte Fahrt mit `tacho: null, category: null`. Sie sind also
+  **nicht** die Ursache einer 500 — eine Vermutung, die ich hatte und die die
+  Messung widerlegt hat.
+* `GET /timelineevents` ist die Leseroute für die eigenen Fahrten:
+  `{type, rideId, bikeId, bikeName, entryType, date, distance, tacho,
+  description, category, altitude, externalId, externalSource}`.
+  `/timeline` gibt es nicht (404).
+
+### Noch nicht gemessen
+
+Das Zeitformat der Punkte. Im Binär steht dafür keine Formatzeichenkette, und
+jede Probe mit einem Punkt würde eine Spur in ein echtes Konto schreiben. Die
+App schickt `yyyy-MM-dd HH:mm:ss` in UTC. Scheitert „Spur nachsenden" weiter mit
+500, ist das der nächste Verdächtige.

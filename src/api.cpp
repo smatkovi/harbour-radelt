@@ -70,6 +70,7 @@ Api::Api(Settings *settings, RideStore *rides, QObject *parent) :
     m_searching(false),
     m_searchingOrganisations(false),
     m_loginRetried(false),
+    m_bikesPending(false),
     m_nextTag(1),
     m_open(0)
 {
@@ -112,6 +113,21 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
               const QVariantMap &body, const QString &rideId,
               qlonglong challengeId)
 {
+    return sendBody(kind, verb, path,
+                    body.isEmpty() ? QByteArray() : Json::serialise(body),
+                    rideId, challengeId);
+}
+
+int Api::sendList(Kind kind, const QString &verb, const QString &path,
+                  const QVariantList &body, const QString &rideId)
+{
+    return sendBody(kind, verb, path, Json::serialise(body), rideId, 0);
+}
+
+int Api::sendBody(Kind kind, const QString &verb, const QString &path,
+                  const QByteArray &body, const QString &rideId,
+                  qlonglong challengeId)
+{
     QStringList headers;
     if (!m_token.isEmpty()) {
         // Nachgemessen am Original (doc/api-echte-antworten.md): die
@@ -131,8 +147,7 @@ int Api::send(Kind kind, const QString &verb, const QString &path,
     ++m_open;
     emit busyChanged();
 
-    m_http->request(tag, verb, QString::fromLatin1(BaseUrl) + path,
-                    body.isEmpty() ? QByteArray() : Json::serialise(body), headers);
+    m_http->request(tag, verb, QString::fromLatin1(BaseUrl) + path, body, headers);
     return tag;
 }
 
@@ -739,8 +754,17 @@ void Api::uploadRide(const QString &rideId)
     // es, stuerzt die Route ab (HTTP 500), statt es zu sagen.
     const qlonglong bikeId = bikeIdFor(ride.value("bike").toString());
     if (bikeId <= 0) {
-        emit rideUploaded(rideId, false,
-                          tr("No bike known yet — open the bikes page once"));
+        // Nach einem Neustart sind die Raeder noch nicht gelesen, und
+        // ohne Rad nimmt der Dienst keine Fahrt an. Frueher stand hier
+        // eine Absage mit der Bitte, einmal die Raederseite zu oeffnen --
+        // das ist Arbeit, die die App selbst tun kann: Raeder holen und
+        // danach weitermachen.
+        if (!m_queue.contains(rideId))
+            m_queue.prepend(rideId);
+        if (!m_bikesPending) {
+            m_bikesPending = true;
+            send(BikesRequest, "GET", "/bikes", QVariantMap());
+        }
         return;
     }
 
@@ -825,11 +849,28 @@ void Api::sendTrack(const QString &rideId, qlonglong remoteId)
         points.append(entry);
     }
 
-    QVariantMap body;
-    body.insert("rideId", remoteId);
-    body.insert("trackData", points);
+    // **Die blanke Liste, keine Huelle.** Am Server nachgemessen: ein
+    // leerer Koerper antwortet ride_track_saved, die blanke leere Liste
+    // ebenso -- aber **jedes** Objekt mit einem Schluessel, auch
+    // {"foo":1}, bringt die Route zum Absturz (HTTP 500 "Server Error").
+    // Sie laeuft also ueber die Nutzlast selbst und nimmt jeden Eintrag
+    // als Punkt. Im Binaer gibt SaveTrackRequest dementsprechend kein
+    // rideId her; die Fahrt ordnet der Dienst selbst zu, deshalb geht die
+    // Spur unmittelbar nach dem Anlegen hoch.
+    (void)remoteId;
+    sendList(TrackSaveRequest, "PUT", "/ride/track/save", points, rideId);
+}
 
-    send(TrackSaveRequest, "PUT", "/ride/track/save", body, rideId);
+void Api::uploadTrack(const QString &rideId)
+{
+    if (!loggedIn()) {
+        setError(tr("Not signed in"));
+        return;
+    }
+    const QVariantMap ride = m_rides->ride(rideId);
+    if (ride.isEmpty())
+        return;
+    sendTrack(rideId, ride.value("remoteId").toLongLong());
 }
 
 void Api::cookieReceived(const QString &name, const QString &value)
@@ -853,6 +894,9 @@ void Api::replyFinished(int tag, int status, const QByteArray &body, const QStri
             emit rideUploaded(pending.rideId, false, error);
         return;
     }
+
+    if (pending.kind == BikesRequest)
+        m_bikesPending = false;
 
     if (status == 401) {
         // The token expired or was withdrawn; ask for the password again
@@ -931,6 +975,10 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
             sendLogin(klein, geheim);
             return;
         }
+        if (pending.kind == BikesRequest) {
+            m_bikesPending = false;
+            m_queue.clear();
+        }
         if (pending.kind == LoginRequest) {
             m_loginRetried = false;
             m_loginPassword.clear();
@@ -947,8 +995,14 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
             m_searching = false;
             emit searchChanged();
         }
-        if (pending.kind == RideSaveRequest || pending.kind == TrackSaveRequest)
+        if (pending.kind == RideSaveRequest)
             emit rideUploaded(pending.rideId, false, message);
+        if (pending.kind == TrackSaveRequest) {
+            // Die Fahrt ist oben -- nur ihre Spur nicht. Das muss anders
+            // klingen als ein gescheiterter Upload, sonst sieht es aus,
+            // als waere nichts passiert, und man schickt sie doppelt.
+            emit trackUploaded(pending.rideId, false, message);
+        }
         return;
     }
 
@@ -993,6 +1047,7 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         emit personChanged();
         break;
     case BikesRequest: {
+        m_bikesPending = false;
         m_bikeNames.clear();
         m_bikeIds.clear();
         m_bikes.clear();
@@ -1010,6 +1065,20 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
             m_bikes << bike;
         }
         emit bikesChanged();
+        // Wartet eine Fahrt auf die Raeder, geht sie jetzt von selbst
+        // hoch -- und wenn die Liste leer blieb, sagt es das einmal,
+        // statt stumm nichts zu tun.
+        if (!m_queue.isEmpty()) {
+            const QString naechste = m_queue.takeFirst();
+            if (m_bikes.isEmpty()) {
+                m_queue.clear();
+                emit rideUploaded(naechste, false,
+                                  tr("Das Konto hat kein Rad. Auf radelt.at oder "
+                                     "unter „Meine Räder\u201c eines anlegen."));
+            } else {
+                uploadRide(naechste);
+            }
+        }
         break;
     }
     case BikeSaveRequest:
@@ -1316,6 +1385,7 @@ void Api::handleEnvelope(const Pending &pending, const QVariantMap &envelope)
         break;
     }
     case TrackSaveRequest:
+        emit trackUploaded(pending.rideId, true, envelope.value("message").toString());
         // The ride already counts; the track is the picture that goes with
         // it, so a failure here must not undo the upload.
         break;
